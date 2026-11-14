@@ -35,7 +35,7 @@ npm run db:reset   # tout réinitialiser avec 3 semaines de données d'exemple
 
 1. Crée une clé sur https://aistudio.google.com/apikey
 2. Copie `.env.example` en `.env` et remplis `GEMINI_API_KEY=...`
-3. Relance `npm run dev`
+3. Relance `npm run dev` (modèle par défaut : `gemini-flash-lite-latest`, rapide ; `gemini-flash-latest` sert de secours si le premier est saturé)
 
 Sans clé, l'onglet Quiz affiche « Quiz pas encore activé » et rien ne casse.
 
