@@ -31,7 +31,7 @@ export const shortDate = (s) => { const d = parse(s); return `${DAYS_SHORT[weekd
 export const weekLabel = (ws) => { const a = parse(ws), b = parse(addDays(ws, 6)); return `du ${a.getDate()} ${a.getMonth() !== b.getMonth() ? MONTHS[a.getMonth()] + ' ' : ''}au ${b.getDate()} ${MONTHS[b.getMonth()]}`; };
 export const relDays = (n) => (n === 0 ? "aujourd'hui" : n === 1 ? 'demain' : n === -1 ? 'hier' : n > 0 ? `dans ${n} jours` : `il y a ${-n} jours`);
 
-export const EVENT_LABEL = { ds: 'DS', bac_blanc: 'Bac blanc', devoir: 'Devoir à rendre', oral: 'Oral', autre: 'Autre' };
+export const EVENT_LABEL = { ds: 'DS', bac_blanc: 'Bac blanc', bac: 'Bac', devoir: 'Devoir à rendre', oral: 'Oral', autre: 'Autre' };
 export const KIND_LABEL = {
   revision_cours: 'Révision', bac_francais: 'Bac de français', refaire_ds: 'Refaire un DS', exercice: 'Exercice',
   devoir: 'Devoir', ds: 'Préparation DS', autre: 'Tâche',

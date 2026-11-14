@@ -120,7 +120,7 @@ export default function Bilan() {
       <div className="section">
         <div className="section-head"><h2 className="h2">Prochaines échéances</h2></div>
         {data.nextExams.length === 0 ? <div className="muted small">Rien de prévu.</div> : data.nextExams.map((e) => (
-          <div key={e.id} className={`event ${['ds', 'bac_blanc'].includes(e.type) ? 'exam' : ''}`}>
+          <div key={e.id} className={`event ${['ds', 'bac_blanc', 'bac'].includes(e.type) ? 'exam' : ''}`}>
             <span className={`tag solid ${e.days <= 3 && e.type !== 'devoir' ? 'red' : ''}`}>J-{e.days}</span>
             <div className="grow"><b>{e.title}</b><div className="small muted">{EVENT_LABEL[e.type]} · {shortDate(e.date)}</div></div>
           </div>

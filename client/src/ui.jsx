@@ -268,8 +268,8 @@ export function AddSheet({ onClose, onDone, defaultDate }) {
           <div>
             <label className="f">Type</label>
             <div className="chips">
-              {['ds', 'bac_blanc', 'devoir', 'oral'].map((k) => (
-                <button type="button" key={k} className={`chip ${['ds', 'bac_blanc'].includes(k) ? 'red' : ''} ${evType === k ? 'on' : ''}`} onClick={() => setEvType(k)}>{EVENT_LABEL[k]}</button>
+              {['ds', 'bac_blanc', 'bac', 'devoir', 'oral'].map((k) => (
+                <button type="button" key={k} className={`chip ${['ds', 'bac_blanc', 'bac'].includes(k) ? 'red' : ''} ${evType === k ? 'on' : ''}`} onClick={() => setEvType(k)}>{EVENT_LABEL[k]}</button>
               ))}
             </div>
           </div>

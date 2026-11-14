@@ -337,3 +337,27 @@ textarea.input { min-height: 90px; resize: vertical; }
 }
 .cal-task.short { flex-direction: row; align-items: center; gap: 5px; white-space: nowrap; }
 .cal-task.short .ct-title { text-overflow: ellipsis; }
+
+/* ---------- Indicateurs (KPI) de l'accueil ---------- */
+.kpi-grid { display: grid; grid-template-columns: 1.35fr 1fr; gap: 10px; margin-top: 6px; }
+.kpi {
+  display: flex; flex-direction: column; justify-content: space-between; gap: 2px; min-height: 92px; padding: 10px 12px;
+  border: var(--line); border-radius: var(--radius); background: var(--paper); box-shadow: var(--pop); color: var(--ink); text-decoration: none;
+  animation: rise .42s ease-out both;
+}
+.kpi:nth-child(2) { animation-delay: 80ms; } .kpi:nth-child(3) { animation-delay: 160ms; } .kpi:nth-child(4) { animation-delay: 240ms; }
+.kpi:nth-child(5) { animation-delay: 320ms; } .kpi:nth-child(6) { animation-delay: 400ms; }
+.kpi-label { display: flex; gap: 5px; align-items: center; font-size: .72rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+.kpi-value { font-family: var(--display); font-size: 2.6rem; line-height: .95; letter-spacing: .01em; }
+.kpi-sub { font-size: .76rem; line-height: 1.25; color: var(--muted); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+/* Tuile principale : encre noire et lignes de vitesse */
+.kpi.hero-kpi { position: relative; overflow: hidden; background: var(--ink); color: var(--paper); clip-path: polygon(0 0, 100% 0, 100% 88%, 94% 100%, 0 100%); }
+.kpi.hero-kpi::before { content: ''; position: absolute; inset: -60%; background: repeating-conic-gradient(from 0deg at 75% 50%, rgba(255,255,255,.16) 0deg 1.4deg, transparent 1.4deg 7deg); pointer-events: none; }
+.kpi.hero-kpi > * { position: relative; }
+.kpi.hero-kpi .kpi-value { font-size: 3.4rem; }
+.kpi.hero-kpi .kpi-sub { color: rgba(255,255,255,.82); }
+.kpi-bad { background: var(--red) !important; color: var(--on-red) !important; animation: impact .3s ease-out 1; }
+.kpi-bad .kpi-sub { color: rgba(255,255,255,.88) !important; }
+.kpi-ok { background: var(--green); color: var(--on-green); }
+.kpi-ok .kpi-sub { color: var(--on-green); }
+@media (min-width: 768px) { .kpi-grid { grid-template-columns: 1.6fr 1fr 1fr; } .kpi-wide { grid-row: span 2; } }

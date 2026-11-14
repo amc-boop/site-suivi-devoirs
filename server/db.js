@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS timetable (
 );
 CREATE TABLE IF NOT EXISTS events (
   id INTEGER PRIMARY KEY,
-  type TEXT NOT NULL CHECK (type IN ('ds','bac_blanc','devoir','oral','autre')),
+  type TEXT NOT NULL CHECK (type IN ('ds','bac_blanc','bac','devoir','oral','autre')),
   title TEXT NOT NULL,
   subject_id INTEGER REFERENCES subjects(id) ON DELETE SET NULL,
   date TEXT NOT NULL,
@@ -107,6 +107,26 @@ CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 `);
 
 // Migrations légères pour les bases déjà créées
+// Ajout du type d'événement « bac » (épreuve officielle) : on recrée la table si besoin
+const evSql = db.prepare("SELECT sql FROM sqlite_master WHERE name = 'events'").get()?.sql || '';
+if (!evSql.includes("'bac',")) {
+  // legacy_alter_table : ne pas réécrire les références des autres tables (tasks.event_id) vers events_old
+  db.exec('PRAGMA foreign_keys = OFF; PRAGMA legacy_alter_table = ON;');
+  db.exec(`BEGIN;
+    ALTER TABLE events RENAME TO events_old;
+    CREATE TABLE events (
+      id INTEGER PRIMARY KEY,
+      type TEXT NOT NULL CHECK (type IN ('ds','bac_blanc','bac','devoir','oral','autre')),
+      title TEXT NOT NULL,
+      subject_id INTEGER REFERENCES subjects(id) ON DELETE SET NULL,
+      date TEXT NOT NULL,
+      notes TEXT DEFAULT ''
+    );
+    INSERT INTO events SELECT * FROM events_old;
+    DROP TABLE events_old;
+    COMMIT;`);
+  db.exec('PRAGMA legacy_alter_table = OFF; PRAGMA foreign_keys = ON;');
+}
 const taskCols = db.prepare('PRAGMA table_info(tasks)').all().map((c) => c.name);
 if (!taskCols.includes('time')) db.exec('ALTER TABLE tasks ADD COLUMN time TEXT');
 if (!taskCols.includes('duration')) db.exec('ALTER TABLE tasks ADD COLUMN duration INTEGER NOT NULL DEFAULT 30');

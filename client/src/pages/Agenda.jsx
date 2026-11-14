@@ -7,7 +7,7 @@ import { useApp, AddSheet, Skeleton, Sheet } from '../ui.jsx';
 const START = 7, END = 23, PPH = 60, PPM = PPH / 60, SNAP = 15;
 const toMin = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
 const toTime = (min) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
-const isExam = (e) => ['ds', 'bac_blanc', 'oral'].includes(e.type);
+const isExam = (e) => ['ds', 'bac_blanc', 'bac', 'oral'].includes(e.type);
 
 function useWide() {
   const q = '(min-width: 900px)';

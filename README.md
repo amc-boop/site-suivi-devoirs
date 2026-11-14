@@ -41,7 +41,7 @@ Sans clé, l'onglet Quiz affiche « Quiz pas encore activé » et rien ne casse.
 
 ## Ce que fait l'appli
 
-- **Aujourd'hui** (élève) : compte à rebours vers le prochain DS / bac blanc (rouge à J-3), tâches du soir à cocher avec compteur X/Y, tâches en retard, cours du jour, devoirs à venir, progression des récompenses. Bouton + avec modèles (réviser un cours, bac de français texte n°X, refaire un DS, exercice, DS/bac blanc/devoir).
+- **Aujourd'hui** (élève) : indicateurs en premier (J-x avant le prochain DS de spé, J-x avant le prochain bac blanc ou bac — rouge à J-3, tâches à faire ce soir, tâches en retard, devoirs à rendre sous 7 jours, % de la semaine), puis les tâches du soir à cocher et les devoirs à venir. Bouton + avec modèles (réviser un cours, bac de français texte n°X, refaire un DS, exercice, DS/bac blanc/bac/devoir).
 - **Tâches automatiques**, générées chaque jour (au plus 5 par soir, réglable) :
   - « Revoir le cours de SES d'aujourd'hui » seulement les jours où il y a SES ;
   - révision quotidienne pendant les 6 jours avant un DS (12 avant un bac blanc) ;

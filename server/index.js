@@ -137,7 +137,7 @@ app.get('/api/today', ALL, wrap((req, res) => {
   const D = today();
   ensureUpTo(D);
   const nextExams = db.prepare(`SELECT e.*, s.name AS subject_name FROM events e LEFT JOIN subjects s ON s.id = e.subject_id
-    WHERE e.type IN ('ds','bac_blanc','oral') AND e.date >= ? ORDER BY e.date LIMIT 3`).all(D)
+    WHERE e.type IN ('ds','bac_blanc','bac','oral') AND e.date >= ? ORDER BY e.date LIMIT 3`).all(D)
     .map((e) => ({ ...e, days: diffDays(D, e.date) }));
   const tasks = sortTasks(db.prepare(`${taskRow} WHERE t.date = ?`).all(D));
   const classes = db.prepare(`SELECT tt.*, s.name AS subject_name, s.short AS subject_short FROM timetable tt JOIN subjects s ON s.id = tt.subject_id
@@ -147,7 +147,13 @@ app.get('/api/today', ALL, wrap((req, res) => {
     .map((e) => ({ ...e, days: diffDays(D, e.date) }));
   const late = db.prepare(`${taskRow} WHERE t.done_at IS NULL AND t.date < ? AND t.date >= ? ORDER BY t.date DESC`).all(D, addDays(D, -14));
   const week = weekStats(weekStart(D));
-  res.json({ date: D, nextExams, tasks, classes, devoirs, late, week, limits: limits() });
+  // Indicateurs de l'accueil : prochain DS de spécialité, prochain bac blanc ou bac
+  const withDays = (e) => (e ? { ...e, days: diffDays(D, e.date) } : null);
+  const nextSpeDs = withDays(db.prepare(`SELECT e.*, s.name AS subject_name FROM events e JOIN subjects s ON s.id = e.subject_id
+    WHERE e.type = 'ds' AND s.is_spe = 1 AND e.date >= ? ORDER BY e.date LIMIT 1`).get(D));
+  const nextBac = withDays(db.prepare(`SELECT e.*, s.name AS subject_name FROM events e LEFT JOIN subjects s ON s.id = e.subject_id
+    WHERE e.type IN ('bac_blanc','bac') AND e.date >= ? ORDER BY e.date LIMIT 1`).get(D));
+  res.json({ date: D, nextExams, nextSpeDs, nextBac, tasks, classes, devoirs, late, week, limits: limits() });
 }));
 
 app.post('/api/tasks', ALL, wrap((req, res) => {
@@ -220,7 +226,7 @@ app.get('/api/week', ALL, wrap((req, res) => {
 }));
 
 // ---------- Événements : DS, bacs blancs, devoirs ----------
-const EVENT_TYPES = ['ds', 'bac_blanc', 'devoir', 'oral', 'autre'];
+const EVENT_TYPES = ['ds', 'bac_blanc', 'bac', 'devoir', 'oral', 'autre'];
 app.get('/api/events', ALL, (req, res) => {
   const from = isDate(req.query.from) ? req.query.from : addDays(today(), -30);
   res.json(db.prepare(`SELECT e.*, s.name AS subject_name FROM events e LEFT JOIN subjects s ON s.id = e.subject_id WHERE e.date >= ? ORDER BY e.date`).all(from));

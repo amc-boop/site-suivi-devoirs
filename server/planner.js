@@ -63,10 +63,10 @@ export function generateDay(D) {
 
     const candidates = [];
     // 3. Révisions avant DS / bac blanc
-    for (const ev of db.prepare(`SELECT * FROM events WHERE type IN ('ds','bac_blanc','oral') AND date > ? AND date <= ?`)
+    for (const ev of db.prepare(`SELECT * FROM events WHERE type IN ('ds','bac_blanc','bac','oral') AND date > ? AND date <= ?`)
       .all(D, addDays(D, L.bacBlancWindow))) {
       const j = diffDays(D, ev.date);
-      if (ev.type !== 'bac_blanc' && j > L.dsWindow) continue;
+      if (!['bac_blanc', 'bac'].includes(ev.type) && j > L.dsWindow) continue;
       const label = j === 1 ? 'demain' : `J-${j}`;
       candidates.push({ title: `Réviser pour ${ev.title} (${label})`, subject: ev.subject_id, kind: 'ds', event: ev.id, key: `prep-${ev.id}-${D}` });
     }

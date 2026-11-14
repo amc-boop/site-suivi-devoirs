@@ -66,6 +66,7 @@ export async function seed({ demo }) {
   ev('ds', 'DS de SES : monnaie et financement', 'SES', 11);
   ev('ds', 'DS de physique : énergie', 'PC', 18);
   ev('bac_blanc', 'Bac blanc de français (écrit)', 'FR', 53, '4 heures, commentaire ou dissertation');
+  ev('bac', 'Bac de français (écrit)', 'FR', 209, 'Date indicative, à corriger quand elle sera officielle');
 
   // 3 semaines d'historique avec des taux de réussite différents
   const rate = (d) => { const w = Math.floor(diffDays(addDays(weekStart(T), -21), d) / 7); return [0.62, 0.92, 0.86, 0.7][w] ?? 0.6; };
