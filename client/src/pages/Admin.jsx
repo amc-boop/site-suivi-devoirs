@@ -133,7 +133,7 @@ function Limits() {
   async function save(e) { e.preventDefault(); try { setS(await api('/settings', { method: 'PATCH', body: s })); toast('Réglages enregistrés'); } catch (er) { toast(er.message, 'red'); } }
   if (!s) return <Skeleton n={1} />;
   const field = (k, label, help) => (
-    <div><label className="f" htmlFor={k}>{label}</label><input id={k} className="input" type="number" min="0" max="30" value={s[k]} onChange={(e) => setS({ ...s, [k]: Number(e.target.value) })} /><div className="small muted">{help}</div></div>
+    <div><label className="f" htmlFor={k}>{label}</label> <input id={k} className="input" type="number" min="0" max={k === 'weeklyQuizPass' ? 100 : 30} value={s[k]} onChange={(e) => setS({ ...s, [k]: Number(e.target.value) })} /><div className="small muted">{help}</div></div>
   );
   return (
     <form className="stack" onSubmit={save}>
@@ -141,6 +141,7 @@ function Limits() {
       {field('maxCarry', 'Nombre de reports maximum', 'Après ce nombre, la tâche reste « en retard » et les parents la voient.')}
       {field('dsWindow', 'Révisions avant un DS (jours)', 'Une tâche de révision par jour pendant ces jours-là.')}
       {field('bacBlancWindow', 'Révisions avant un bac blanc (jours)', '')}
+      {field('weeklyQuizPass', 'Quiz de la semaine : % de bonnes réponses pour réussir', 'Le rendu de la semaine ne peut être envoyé qu’après avoir réussi ce quiz.')}
       <button className="btn">Enregistrer</button>
     </form>
   );

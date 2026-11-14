@@ -9,6 +9,7 @@ import { db, UPLOAD_DIR, tx, getSetting, setSetting } from './db.js';
 import { ensureUpTo, today, addDays, weekStart, weekday, weekStats, isDate, priority, diffDays, limits } from './planner.js';
 import { rewardProgress } from './rewards.js';
 import { geminiEnabled, quizFromImages } from './gemini.js';
+import { publicQuiz, generateWeeklyQuiz, answerQuestion, finishAttempt, weeklyQuizPassed, weeklyQuizSummary, weeklyQuizPossible } from './weeklyQuiz.js';
 import { hashPassword, verifyPassword, seedIfEmpty } from './seed.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -120,8 +121,8 @@ app.delete('/api/timetable/:id', PARENT, wrap((req, res) => { db.prepare('DELETE
 // ---------- Réglages ----------
 app.get('/api/settings', ALL, (req, res) => res.json(limits()));
 app.patch('/api/settings', ADMIN, wrap((req, res) => {
-  for (const k of ['maxPerDay', 'maxCarry', 'dsWindow', 'bacBlancWindow']) {
-    if (req.body[k] != null) { const n = Number(req.body[k]); if (!(n >= 0 && n <= 30)) throw fail(400, `Valeur invalide pour ${k}`); setSetting(k, n); }
+  for (const k of ['maxPerDay', 'maxCarry', 'dsWindow', 'bacBlancWindow', 'weeklyQuizPass']) {
+    if (req.body[k] != null) { const n = Number(req.body[k]); if (!(n >= 0 && n <= (k === 'weeklyQuizPass' ? 100 : 30))) throw fail(400, `Valeur invalide pour ${k}`); setSetting(k, n); }
   }
   res.json(limits());
 }));
@@ -253,8 +254,17 @@ function weekReport(ws) {
   const tasks = db.prepare(`${taskRow} WHERE t.original_date BETWEEN ? AND ? ORDER BY t.original_date, t.id`).all(ws, we);
   const report = db.prepare(`SELECT r.*, u.display_name AS seen_by_name FROM weekly_reports r LEFT JOIN users u ON u.id = r.seen_by WHERE week_start = ?`).get(ws) || null;
   const days = db.prepare('SELECT date, submitted_at FROM daily_reports WHERE date BETWEEN ? AND ? ORDER BY date').all(ws, we);
-  return { week_start: ws, today: today(), stats: weekStats(ws), report, tasks, dayReports: days };
+  const quiz = weeklyQuizSummary(ws);
+  return { week_start: ws, today: today(), stats: weekStats(ws), report, tasks, dayReports: days,
+    quiz: quiz ? { ...quiz, required: true } : { required: weeklyQuizPossible(ws), passed_at: null } };
 }
+
+// ---------- Quiz de la semaine (obligatoire pour le rendu) ----------
+const wsOf = (v) => weekStart(isDate(v) ? v : today());
+app.get('/api/weekly-quiz', ALL, wrap((req, res) => res.json(publicQuiz(wsOf(req.query.week)))));
+app.post('/api/weekly-quiz/generate', STUDENT, wrap(async (req, res) => res.json(await generateWeeklyQuiz(wsOf(req.body.week), { force: !!req.body.force }))));
+app.post('/api/weekly-quiz/answer', STUDENT, wrap((req, res) => res.json(answerQuestion(wsOf(req.body.week), Number(req.body.i), req.body.choice))));
+app.post('/api/weekly-quiz/finish', STUDENT, wrap((req, res) => res.json(finishAttempt(wsOf(req.body.week)))));
 
 // ---------- Rendu du jour ----------
 function dayReport(D) {
@@ -278,6 +288,11 @@ app.post('/api/day-report/submit', STUDENT, wrap((req, res) => {
 app.get('/api/report', ALL, wrap((req, res) => res.json(weekReport(weekStart(isDate(req.query.week) ? req.query.week : today())))));
 app.post('/api/report/submit', STUDENT, wrap((req, res) => {
   const ws = weekStart(isDate(req.body.week) ? req.body.week : today());
+  // Le rendu de la semaine ne part qu'après avoir réussi le quiz de la semaine
+  // (sauf s'il n'y a vraiment rien pour le construire : aucune tâche cochée ni quiz)
+  if (!weeklyQuizPassed(ws) && (weeklyQuizSummary(ws) || weeklyQuizPossible(ws))) {
+    throw fail(400, `Réussis d'abord le quiz de la semaine (${limits().weeklyQuizPass} % de bonnes réponses) pour envoyer ton rendu.`);
+  }
   db.prepare(`INSERT INTO weekly_reports(week_start, submitted_at, student_comment) VALUES (?,?,?)
     ON CONFLICT(week_start) DO UPDATE SET submitted_at = excluded.submitted_at, student_comment = excluded.student_comment,
       status = CASE WHEN status = 'a_revoir' THEN NULL ELSE status END`)

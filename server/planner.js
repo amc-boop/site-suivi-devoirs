@@ -18,6 +18,7 @@ export const limits = () => ({
   maxCarry: getSetting('maxCarry', 2),
   dsWindow: getSetting('dsWindow', 6),
   bacBlancWindow: getSetting('bacBlancWindow', 12),
+  weeklyQuizPass: getSetting('weeklyQuizPass', 70),
 });
 
 // Priorité pour l'ordre d'affichage et le remplissage

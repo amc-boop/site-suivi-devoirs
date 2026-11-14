@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, ChevronDown, Send, TriangleAlert, CircleCheck, Hourglass, CalendarCheck } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronDown, Send, TriangleAlert, CircleCheck, Hourglass, CalendarCheck, Brain, Lock, X } from 'lucide-react';
 import { api, addDays, weekStart, todayStr, weekLabel, dayLabel, weekday, DAYS_SHORT, parse } from '../lib.js';
 import { useApp, TaskItem, Skeleton, Empty, Bar, Pct, Flag } from '../ui.jsx';
 
@@ -98,6 +98,117 @@ function DayRendu() {
   );
 }
 
+// ---------- Quiz de la semaine (obligatoire pour envoyer le rendu) ----------
+function WeeklyQuizPlayer({ ws, quiz, onDone, onExit }) {
+  const { toast } = useApp();
+  const [qs, setQs] = useState(quiz.questions);
+  const first = qs.findIndex((q) => q.answered === undefined);
+  const [i, setI] = useState(first === -1 ? qs.length - 1 : first);
+  const [result, setResult] = useState(null);
+  const q = qs[i];
+  const answered = q.answered !== undefined;
+
+  async function pick(k) {
+    if (answered) return;
+    try {
+      const r = await api('/weekly-quiz/answer', { method: 'POST', body: { week: ws, i, choice: k } });
+      setQs((list) => list.map((x, j) => (j === i ? { ...x, answered: r.answered, bonne: r.bonne, explication: r.explication } : x)));
+    } catch (e) { toast(e.message, 'red'); }
+  }
+  async function next() {
+    if (i + 1 < qs.length) { setI(i + 1); return; }
+    try { setResult(await api('/weekly-quiz/finish', { method: 'POST', body: { week: ws } })); } catch (e) { toast(e.message, 'red'); }
+  }
+
+  if (result) {
+    return (
+      <div className="panel center">
+        <div className={`alert ${result.passed ? 'ok' : 'bad'}`} style={{ justifyContent: 'center' }}>
+          {result.passed ? <CircleCheck size={30} /> : <TriangleAlert size={30} />}
+          <span className="sfx-title" style={{ fontSize: '2.2rem' }}>{result.passed ? 'QUIZ RÉUSSI !' : 'PAS ENCORE…'}</span>
+        </div>
+        <div className="stat" style={{ marginTop: 10 }}>{result.score} / {result.total}</div>
+        <div className="small muted">Il faut {result.pass} % de bonnes réponses.</div>
+        <div className="row" style={{ marginTop: 14, justifyContent: 'center' }}>
+          <button className="btn" onClick={() => onDone(result)}>{result.passed ? 'Envoyer mon rendu' : 'Revoir et réessayer'}</button>
+        </div>
+        {!result.passed && <div className="small muted" style={{ marginTop: 8 }}>Les questions et les réponses seront mélangées au prochain essai.</div>}
+      </div>
+    );
+  }
+
+  const good = answered && q.answered === q.bonne;
+  return (
+    <div>
+      <div className="row">
+        <span className="small muted grow">Quiz de la semaine{q.matiere ? ` · ${q.matiere}` : ''}</span>
+        <span className="mono small">{i + 1}/{qs.length}</span>
+        <button className="icon-btn plain" onClick={onExit} aria-label="Quitter le quiz"><X size={20} /></button>
+      </div>
+      <div style={{ margin: '6px 0 14px' }}><Bar value={(i / qs.length) * 100} /></div>
+      <div className="speech" style={{ fontWeight: 700, fontSize: '1.05rem', marginBottom: 22 }}>{q.question}</div>
+      {q.choix.map((c, k) => (
+        <button key={k} className={`quiz-choice ${answered && k === q.bonne ? 'good' : ''} ${answered && q.answered === k && k !== q.bonne ? 'bad' : ''}`} onClick={() => pick(k)}>{c}</button>
+      ))}
+      {answered && (
+        <div className={`panel section ${good ? 'green' : 'red'}`}>
+          <b className="row" style={{ gap: 6 }}>{good ? <><CircleCheck size={18} /> Bonne réponse !</> : <><TriangleAlert size={18} /> Raté.</>}</b>
+          {q.explication && <div className="small" style={{ marginTop: 4 }}>{q.explication}</div>}
+          <button className="btn block" style={{ marginTop: 12 }} onClick={next}>{i + 1 < qs.length ? 'Question suivante' : 'Voir mon score'}</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WeeklyQuizGate({ ws, info, onChange }) {
+  const { toast } = useApp();
+  const [quiz, setQuiz] = useState(null);
+  const [playing, setPlaying] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(() => api(`/weekly-quiz?week=${ws}`).then(setQuiz).catch((e) => toast(e.message, 'red')), [ws, toast]);
+  useEffect(() => { load(); }, [load, info?.passed_at]);
+
+  async function start() {
+    setBusy(true);
+    try { const q = quiz?.exists ? quiz : await api('/weekly-quiz/generate', { method: 'POST', body: { week: ws } }); setQuiz(q); setPlaying(true); }
+    catch (e) { toast(e.message, 'red'); }
+    setBusy(false);
+  }
+  if (!quiz) return <Skeleton n={1} />;
+  if (playing) {
+    return (
+      <div className="panel section">
+        <WeeklyQuizPlayer ws={ws} quiz={quiz} onExit={() => { setPlaying(false); load(); }}
+          onDone={() => { setPlaying(false); load(); onChange(); }} />
+      </div>
+    );
+  }
+  if (quiz.passed_at) {
+    return (
+      <div className="alert ok section">
+        <Brain size={26} />
+        <div><span className="sfx-title" style={{ fontSize: '1.3rem' }}>QUIZ RÉUSSI !</span><div className="small">Meilleur score {quiz.best_score}/{quiz.total} · {quiz.attempts} essai{quiz.attempts > 1 ? 's' : ''}</div></div>
+      </div>
+    );
+  }
+  if (!quiz.exists && !quiz.canGenerate) {
+    return <div className="panel tone section small"><b>Pas de quiz cette semaine</b> : aucune tâche cochée ni quiz créé. Tu peux envoyer ton rendu directement.</div>;
+  }
+  return (
+    <div className="panel section" style={{ borderLeft: '8px solid var(--ink)' }}>
+      <div className="row"><Lock size={20} /><b className="grow">Quiz de la semaine obligatoire</b></div>
+      <div className="small" style={{ margin: '6px 0 12px' }}>
+        Pour envoyer ton rendu, réussis le quiz sur les cours que tu as travaillés cette semaine ({quiz.pass} % de bonnes réponses).
+        {quiz.exists && quiz.attempts > 0 && <> Dernier essai : {quiz.last_score}/{quiz.total}.</>}
+      </div>
+      <button className="btn big block" onClick={start} disabled={busy}>
+        <Brain size={20} /> {busy ? 'Préparation du quiz…' : quiz.exists && quiz.attempts > 0 ? 'Réessayer le quiz' : quiz.exists ? 'Reprendre le quiz' : 'Lancer le quiz'}
+      </button>
+    </div>
+  );
+}
+
 function WeekRendu() {
   const { toast } = useApp();
   const [ws, setWs] = useState(weekStart(todayStr()));
@@ -122,6 +233,7 @@ function WeekRendu() {
   const isCurrent = ws === weekStart(todayStr());
   const r = data?.report;
   const validated = r?.status === 'validee';
+  const quizLocked = Boolean(data?.quiz?.required && !data.quiz.passed_at);
   return (
     <div className="section" style={{ marginTop: 34 }}>
       <div className="section-head"><h2 className="h2">Rendu de la semaine</h2></div>
@@ -165,12 +277,15 @@ function WeekRendu() {
           </button>
           {showDetail && <WeekTasks tasks={data.tasks} onChange={() => load()} />}
 
+          {!validated && <WeeklyQuizGate ws={ws} info={data.quiz} onChange={load} />}
+
           {!validated && (
             <div className="section panel">
               {isCurrent && !weekend && !r?.submitted_at && <div className="small muted" style={{ marginBottom: 10 }}>Le rendu de la semaine se fait le week-end : vérifie que tout est coché, puis envoie-le aux parents.</div>}
               <label className="f" htmlFor="cmt">Un mot pour les parents (facultatif)</label>
               <textarea id="cmt" className="input" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Ex. J'ai refait le DS de maths en entier" />
-              <button className="btn block big" style={{ marginTop: 12 }} onClick={submit} disabled={busy}>
+              {quizLocked && <div className="small warn-text" style={{ marginTop: 10 }}><Lock size={16} /> Envoi possible une fois le quiz réussi.</div>}
+              <button className="btn block big" style={{ marginTop: 12 }} onClick={submit} disabled={busy || quizLocked}>
                 <Send size={20} /> {r?.status === 'a_revoir' ? 'Renvoyer aux parents' : r?.submitted_at ? 'Mettre à jour mon rendu' : 'Envoyer aux parents pour validation'}
               </button>
               {r?.submitted_at && <div className="small muted center" style={{ marginTop: 8 }}>Envoyé {when(r.submitted_at)}</div>}

@@ -81,6 +81,17 @@ CREATE TABLE IF NOT EXISTS daily_reports (
   submitted_at TEXT NOT NULL,
   comment TEXT DEFAULT ''
 );
+CREATE TABLE IF NOT EXISTS weekly_quizzes (
+  week_start TEXT PRIMARY KEY,
+  questions TEXT NOT NULL,          -- [{question, choix, bonne, explication, matiere}]
+  sources TEXT NOT NULL DEFAULT '', -- d'où viennent les questions (pour les parents)
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  current_answers TEXT NOT NULL DEFAULT '{}', -- réponses de l'essai en cours
+  attempts INTEGER NOT NULL DEFAULT 0,
+  best_score INTEGER,
+  last_score INTEGER,
+  passed_at TEXT
+);
 CREATE TABLE IF NOT EXISTS grades (
   id INTEGER PRIMARY KEY,
   subject_id INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,

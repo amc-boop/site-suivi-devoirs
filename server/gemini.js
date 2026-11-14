@@ -32,10 +32,10 @@ async function callGemini(body) {
   throw last;
 }
 
-export async function quizFromImages(images, { subject, chapter, count = 8 }) {
+export async function quizFromImages(images, { subject, chapter, count = 8, prompt: customPrompt, allowEmptyImages = false }) {
   if (!geminiEnabled()) throw Object.assign(new Error('Quiz désactivé : aucune clé GEMINI_API_KEY.'), { status: 503 });
 
-  const prompt = `Tu es professeur en classe de première générale en France.
+  const prompt = customPrompt || `Tu es professeur en classe de première générale en France.
 Voici la photo d'un cours de ${subject || 'une matière'}${chapter ? `, chapitre « ${chapter} »` : ''}.
 Écris ${count} questions de révision en français, uniquement à partir de ce qui est dans le cours.
 Mélange : définitions, formules ou mécanismes, et application courte.
@@ -66,6 +66,7 @@ Si la photo est illisible ou n'est pas un cours, renvoie une liste vide.`;
                 choix: { type: 'ARRAY', items: { type: 'STRING' } },
                 bonne: { type: 'INTEGER', description: 'index (0 à 3) de la bonne réponse' },
                 explication: { type: 'STRING' },
+                matiere: { type: 'STRING' },
               },
               required: ['question', 'choix', 'bonne', 'explication'],
             },
@@ -83,6 +84,6 @@ Si la photo est illisible ou n'est pas un cours, renvoie une liste vide.`;
   const questions = (parsed.questions || [])
     .filter((q) => q.question && Array.isArray(q.choix) && q.choix.length >= 2 && Number.isInteger(q.bonne) && q.bonne >= 0 && q.bonne < q.choix.length)
     .slice(0, 15);
-  if (!questions.length) throw Object.assign(new Error("Gemini n'a pas trouvé de cours lisible sur la photo."), { status: 422 });
+  if (!questions.length && !allowEmptyImages) throw Object.assign(new Error("Gemini n'a pas trouvé de cours lisible sur la photo."), { status: 422 });
   return { titre: parsed.titre || chapter, questions };
 }

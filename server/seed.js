@@ -41,7 +41,7 @@ const TIMETABLE = [
 export async function seed({ demo }) {
   const { db, tx, DB_PATH } = await import('./db.js');
   tx(() => {
-    for (const t of ['quizzes', 'rewards', 'grades', 'daily_reports', 'weekly_reports', 'generated_days', 'tasks', 'events', 'timetable', 'subjects', 'sessions', 'users']) db.exec(`DELETE FROM ${t}`);
+    for (const t of ['weekly_quizzes', 'quizzes', 'rewards', 'grades', 'daily_reports', 'weekly_reports', 'generated_days', 'tasks', 'events', 'timetable', 'subjects', 'sessions', 'users']) db.exec(`DELETE FROM ${t}`);
     for (const a of DEFAULT_ACCOUNTS) {
       db.prepare('INSERT INTO users(username, display_name, role, password_hash) VALUES (?,?,?,?)').run(a.username, a.display_name, a.role, hashPassword(a.password));
     }

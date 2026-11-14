@@ -58,6 +58,11 @@ function WeekDetail({ ws, onClose, onSeen }) {
             ? <div className="small"><b>Rendu envoyé</b> le {new Date(d.report.submitted_at).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
             : <div className="small warn-text"><TriangleAlert size={16} /> Rendu pas encore envoyé</div>}
           {d.report?.student_comment && <div className="speech">{d.report.student_comment}</div>}
+          {d.quiz?.total ? (
+            d.quiz.passed_at
+              ? <div className="small"><Flag ok>Quiz de la semaine réussi</Flag> <span className="muted">{d.quiz.best_score}/{d.quiz.total} · {d.quiz.attempts} essai{d.quiz.attempts > 1 ? 's' : ''}{d.quiz.sources ? ` · ${d.quiz.sources}` : ''}</span></div>
+              : <div className="small"><Flag>Quiz pas encore réussi</Flag> <span className="muted">{d.quiz.attempts} essai{d.quiz.attempts > 1 ? 's' : ''}{d.quiz.best_score != null ? ` · meilleur ${d.quiz.best_score}/${d.quiz.total}` : ''}</span></div>
+          ) : null}
 
           {photos.length > 0 && (
             <div>
