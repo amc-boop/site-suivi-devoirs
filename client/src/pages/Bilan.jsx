@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Eye, Camera, TriangleAlert, ChevronRight } from 'lucide-react';
+import { Eye, Camera, TriangleAlert, ChevronRight, Plus } from 'lucide-react';
 import { api, weekLabel, shortDate, EVENT_LABEL } from '../lib.js';
-import { useApp, Skeleton, Sheet, Pct, Bar, Lightbox, Empty, Flag } from '../ui.jsx';
+import { useApp, Skeleton, Sheet, Pct, Bar, Lightbox, Empty, Flag, AddSheet } from '../ui.jsx';
 import { WeekTasks } from './Rendu.jsx';
 
 function WeeksChart({ weeks }) {
@@ -85,6 +85,7 @@ export default function Bilan() {
   const { toast } = useApp();
   const [data, setData] = useState(null);
   const [open, setOpen] = useState(null);
+  const [adding, setAdding] = useState(false);
   const load = useCallback(() => api('/overview').then(setData).catch((e) => toast(e.message, 'red')), [toast]);
   useEffect(() => { load(); }, [load]);
   if (!data) return <div className="page"><Skeleton n={5} /></div>;
@@ -93,7 +94,7 @@ export default function Bilan() {
   const toSee = data.weeks.filter((w) => w.submitted_at && !w.seen_at);
   return (
     <div className="page">
-      <h1 className="h1">Bilan</h1>
+      <div className="row"><h1 className="h1 grow">Bilan</h1><button className="btn sm" onClick={() => setAdding(true)}><Plus size={18} /> Tâche</button></div>
 
       {toSee.length > 0 && (
         <button className="panel red row section" style={{ width: '100%', cursor: 'pointer', textAlign: 'left' }} onClick={() => setOpen(toSee[0].week_start)}>
@@ -159,6 +160,7 @@ export default function Bilan() {
         )}
       </div>
 
+      {adding && <AddSheet onClose={() => setAdding(false)} onDone={load} />}
       {open && <WeekDetail ws={open} onClose={() => setOpen(null)} onSeen={load} />}
     </div>
   );

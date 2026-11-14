@@ -50,7 +50,7 @@ Sans clé, l'onglet Quiz affiche « Quiz pas encore activé » et rien ne casse.
   - Les tâches non faites sont reportées au lendemain 2 fois maximum, puis restent « en retard ».
 - **Agenda** : vue semaine avec cours, DS, bacs blancs, devoirs et tâches.
 - **Rendu** du week-end : liste de la semaine, cocher ou joindre une photo par tâche, mot pour les parents, « Valider ma semaine ».
-- **Bilan** (parents) : % de la semaine, historique en graphique, photos, retards, bouton « Vu » + commentaire.
+- **Bilan** (parents) : % de la semaine, historique en graphique, photos, retards, bouton « Vu » + commentaire. Les parents peuvent aussi ajouter des tâches (marquées « parents », lui seul les coche), des DS et devoirs dans l'agenda, et modifier l'emploi du temps.
 - **Récompenses** par paliers : X semaines de suite à Y %, +N points de moyenne dans une matière, ou objectif libre.
 - **Notes** de DS avec courbe et moyenne par matière.
 - **Réglages** (admin) : éditeur d'emploi du temps, comptes, matières (spé / révision du soir), limites des tâches.

@@ -30,7 +30,7 @@ function SlotRow({ slot, subjects, onSaved, onDelete }) {
   );
 }
 
-function Timetable() {
+export function Timetable() {
   const { subjects, toast } = useApp();
   const [slots, setSlots] = useState(null);
   const [drafts, setDrafts] = useState([]);
@@ -44,7 +44,7 @@ function Timetable() {
   if (!slots) return <Skeleton />;
   return (
     <div className="stack">
-      <div className="small muted">Les tâches « Revoir le cours de … » sont créées chaque jour pour les matières de ce jour-là (si la révision quotidienne est activée pour la matière, onglet Matières).</div>
+      <div className="small muted">Les tâches « Revoir le cours de … » sont créées chaque jour pour les matières de ce jour-là. Les horaires sont enregistrés dès que tu touches l’icône disquette.</div>
       {[1, 2, 3, 4, 5, 6].map((wd) => {
         const list = [...slots.filter((s) => s.weekday === wd), ...drafts.filter((d) => d.weekday === wd)];
         return (

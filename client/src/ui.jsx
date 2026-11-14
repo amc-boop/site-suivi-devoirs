@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Camera, X, BookOpen, FileText, RotateCcw, PenLine, CalendarPlus, Plus, Trash2, CalendarClock, CircleCheck, TriangleAlert } from 'lucide-react';
+import { Check, Camera, X, BookOpen, FileText, RotateCcw, PenLine, CalendarPlus, Plus, Trash2, CalendarClock, CircleCheck, TriangleAlert, UsersRound } from 'lucide-react';
 import { api, addDays, todayStr, weekday, shortDate, KIND_LABEL, EVENT_LABEL, DAYS } from './lib.js';
 
 export const AppCtx = createContext(null);
@@ -77,7 +77,9 @@ const displayTitle = (t, today) => (t.original_date !== today && t.title.endsWit
 
 // ---------- Une tâche à cocher ----------
 export function TaskItem({ task, onChange, readOnly, showDate, allowPhoto, allowDelete, delay = 0 }) {
-  const { toast } = useApp();
+  const { toast, user } = useApp();
+  // Élève/admin : tâches ajoutées à la main ; parents : seulement celles qu'ils ont ajoutées
+  const canDelete = allowDelete && (user.role === 'parent' ? task.source === 'parent' : ['manuel', 'parent'].includes(task.source));
   const [busy, setBusy] = useState(false);
   const [sfx, setSfx] = useState(false);
   const [zoom, setZoom] = useState(null);
@@ -125,6 +127,7 @@ export function TaskItem({ task, onChange, readOnly, showDate, allowPhoto, allow
           {task.subject_short && <span className="tag">{task.subject_short}</span>}
           <span>{KIND_LABEL[task.kind] || 'Tâche'}</span>
           {showDate && <span>{shortDate(task.original_date)}</span>}
+          {task.source === 'parent' && <span className="tag"><UsersRound size={12} /> parents</span>}
           {task.carried > 0 && !late && <span className="tag">reportée {task.carried}×</span>}
           {late && <span className="tag solid red"><TriangleAlert size={12} /> en retard</span>}
         </div>
@@ -139,7 +142,7 @@ export function TaskItem({ task, onChange, readOnly, showDate, allowPhoto, allow
       {!readOnly && !allowPhoto && !task.done_at && task.date === today && (
         <button className="icon-btn plain" onClick={postpone} aria-label="Reporter à demain" title="Reporter à demain"><CalendarClock size={20} /></button>
       )}
-      {!readOnly && allowDelete && task.source === 'manuel' && (
+      {canDelete && (
         <button className="icon-btn plain" onClick={remove} aria-label="Supprimer"><Trash2 size={18} /></button>
       )}
       {sfx && <span className="sfx" aria-hidden="true">FAIT !</span>}

@@ -9,7 +9,8 @@ export default function Agenda() {
   const [sel, setSel] = useState(todayStr());
   const [data, setData] = useState(null);
   const [adding, setAdding] = useState(false);
-  const canEdit = user.role !== 'parent';
+  const canEdit = true; // élève, parents et admin peuvent ajouter tâches et événements
+  const isParent = user.role === 'parent';
 
   const load = useCallback(async () => {
     try { setData(await api(`/week?start=${ws}`)); } catch (e) { toast(e.message, 'red'); }
@@ -74,7 +75,7 @@ export default function Agenda() {
                 <div className="section-head"><h3 className="h2">Tâches</h3><span className="aside">{day.tasks.filter((t) => t.done_at).length}/{day.tasks.length}</span></div>
                 {day.tasks.length === 0
                   ? <div className="muted small">{day.date > data.today ? 'Les tâches automatiques apparaissent le jour même. Tu peux en planifier avec +.' : 'Aucune tâche.'}</div>
-                  : day.tasks.map((t) => <TaskItem key={t.id} task={t} onChange={() => load()} readOnly={!canEdit} allowDelete />)}
+                  : day.tasks.map((t) => <TaskItem key={t.id} task={t} onChange={() => load()} readOnly={isParent} allowDelete />)}
               </div>
 
               <div className="section">

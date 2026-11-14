@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Sun, CalendarDays, Send, LineChart, Brain, ClipboardCheck, Gift, Settings, LogOut, UserRound, CircleCheck, TriangleAlert } from 'lucide-react';
+import { Sun, CalendarDays, Send, LineChart, Brain, ClipboardCheck, Gift, Settings, LogOut, UserRound, Clock, CircleCheck, TriangleAlert } from 'lucide-react';
 import { api, ROLE_LABEL } from './lib.js';
 import { AppCtx, Skeleton } from './ui.jsx';
 import Login from './pages/Login.jsx';
@@ -12,13 +12,14 @@ import Bilan from './pages/Bilan.jsx';
 import Rewards from './pages/Rewards.jsx';
 import Admin from './pages/Admin.jsx';
 import Compte from './pages/Compte.jsx';
+import Edt from './pages/Edt.jsx';
 
 const NAV = {
   eleve: [['/', 'Aujourd’hui', Sun], ['/agenda', 'Agenda', CalendarDays], ['/rendu', 'Rendu', Send], ['/notes', 'Notes', LineChart], ['/quiz', 'Quiz', Brain]],
-  parent: [['/bilan', 'Bilan', ClipboardCheck], ['/recompenses', 'Récompenses', Gift], ['/notes', 'Notes', LineChart], ['/agenda', 'Agenda', CalendarDays]],
+  parent: [['/bilan', 'Bilan', ClipboardCheck], ['/agenda', 'Agenda', CalendarDays], ['/edt', 'Emploi du t.', Clock], ['/recompenses', 'Récomp.', Gift], ['/notes', 'Notes', LineChart]],
   admin: [['/', 'Aujourd’hui', Sun], ['/agenda', 'Agenda', CalendarDays], ['/bilan', 'Bilan', ClipboardCheck], ['/recompenses', 'Récomp.', Gift], ['/admin', 'Réglages', Settings]],
 };
-const PAGES = { '/': Today, '/agenda': Agenda, '/rendu': Rendu, '/notes': Notes, '/quiz': Quiz, '/bilan': Bilan, '/recompenses': Rewards, '/admin': Admin, '/compte': Compte };
+const PAGES = { '/': Today, '/agenda': Agenda, '/rendu': Rendu, '/notes': Notes, '/quiz': Quiz, '/bilan': Bilan, '/recompenses': Rewards, '/admin': Admin, '/compte': Compte, '/edt': Edt };
 
 const useRoute = () => {
   const get = () => (window.location.hash.replace(/^#/, '') || '/').split('?')[0];

@@ -107,15 +107,15 @@ const validSlot = (s) => {
   if (!db.prepare('SELECT 1 FROM subjects WHERE id = ?').get(Number(s.subject_id))) throw fail(400, 'Matière inconnue');
   return [wd, s.start, s.end, Number(s.subject_id), str(s.room, 20)];
 };
-app.post('/api/timetable', ADMIN, wrap((req, res) => {
+app.post('/api/timetable', PARENT, wrap((req, res) => {
   const r = db.prepare('INSERT INTO timetable(weekday,start,end,subject_id,room) VALUES (?,?,?,?,?)').run(...validSlot(req.body));
   res.json({ id: Number(r.lastInsertRowid) });
 }));
-app.patch('/api/timetable/:id', ADMIN, wrap((req, res) => {
+app.patch('/api/timetable/:id', PARENT, wrap((req, res) => {
   db.prepare('UPDATE timetable SET weekday=?, start=?, end=?, subject_id=?, room=? WHERE id=?').run(...validSlot(req.body), int(req.params.id));
   res.json({ ok: true });
 }));
-app.delete('/api/timetable/:id', ADMIN, wrap((req, res) => { db.prepare('DELETE FROM timetable WHERE id = ?').run(int(req.params.id)); res.json({ ok: true }); }));
+app.delete('/api/timetable/:id', PARENT, wrap((req, res) => { db.prepare('DELETE FROM timetable WHERE id = ?').run(int(req.params.id)); res.json({ ok: true }); }));
 
 // ---------- Réglages ----------
 app.get('/api/settings', ALL, (req, res) => res.json(limits()));
@@ -147,13 +147,15 @@ app.get('/api/today', ALL, wrap((req, res) => {
   res.json({ date: D, nextExams, tasks, classes, devoirs, late, week, limits: limits() });
 }));
 
-app.post('/api/tasks', STUDENT, wrap((req, res) => {
+app.post('/api/tasks', ALL, wrap((req, res) => {
   const title = str(req.body.title, 140); if (!title) throw fail(400, 'Titre requis');
   const date = isDate(req.body.date) ? req.body.date : today();
   const kind = ['revision_cours', 'bac_francais', 'refaire_ds', 'exercice', 'devoir', 'ds', 'autre'].includes(req.body.kind) ? req.body.kind : 'autre';
   const subject = req.body.subject_id ? Number(req.body.subject_id) : null;
-  const r = db.prepare(`INSERT INTO tasks(date, original_date, title, subject_id, kind, source) VALUES (?,?,?,?,?, 'manuel')`)
-    .run(date, date, title, subject, kind);
+  // Les tâches ajoutées par les parents sont marquées pour que l'élève le voie
+  const source = req.user.role === 'parent' ? 'parent' : 'manuel';
+  const r = db.prepare(`INSERT INTO tasks(date, original_date, title, subject_id, kind, source) VALUES (?,?,?,?,?,?)`)
+    .run(date, date, title, subject, kind, source);
   res.json(db.prepare(`${taskRow} WHERE t.id = ?`).get(Number(r.lastInsertRowid)));
 }));
 app.patch('/api/tasks/:id', STUDENT, wrap((req, res) => {
@@ -163,7 +165,14 @@ app.patch('/api/tasks/:id', STUDENT, wrap((req, res) => {
   if (isDate(req.body.date)) db.prepare('UPDATE tasks SET date = ? WHERE id = ?').run(req.body.date, t.id);
   res.json(db.prepare(`${taskRow} WHERE t.id = ?`).get(t.id));
 }));
-app.delete('/api/tasks/:id', STUDENT, wrap((req, res) => { db.prepare('DELETE FROM tasks WHERE id = ?').run(int(req.params.id)); res.json({ ok: true }); }));
+app.delete('/api/tasks/:id', ALL, wrap((req, res) => {
+  const t = db.prepare('SELECT source FROM tasks WHERE id = ?').get(int(req.params.id));
+  if (!t) throw fail(404, 'Tâche introuvable');
+  // Les parents ne suppriment que les tâches qu'ils ont ajoutées
+  if (req.user.role === 'parent' && t.source !== 'parent') throw fail(403, 'Seules les tâches ajoutées par les parents peuvent être supprimées ici.');
+  db.prepare('DELETE FROM tasks WHERE id = ?').run(int(req.params.id));
+  res.json({ ok: true });
+}));
 app.post('/api/tasks/:id/photo', STUDENT, upload.single('photo'), wrap((req, res) => {
   const t = db.prepare('SELECT * FROM tasks WHERE id = ?').get(int(req.params.id)); if (!t) throw fail(404, 'Tâche introuvable');
   if (!req.file) throw fail(400, 'Photo manquante (formats image uniquement).');
@@ -208,15 +217,15 @@ const eventFields = (b) => {
   const title = str(b.title, 120); if (!title) throw fail(400, 'Titre requis');
   return [b.type, title, b.subject_id ? Number(b.subject_id) : null, b.date, str(b.notes, 500)];
 };
-app.post('/api/events', STUDENT, wrap((req, res) => {
+app.post('/api/events', ALL, wrap((req, res) => {
   const r = db.prepare('INSERT INTO events(type,title,subject_id,date,notes) VALUES (?,?,?,?,?)').run(...eventFields(req.body));
   res.json({ id: Number(r.lastInsertRowid) });
 }));
-app.patch('/api/events/:id', STUDENT, wrap((req, res) => {
+app.patch('/api/events/:id', ALL, wrap((req, res) => {
   db.prepare('UPDATE events SET type=?, title=?, subject_id=?, date=?, notes=? WHERE id=?').run(...eventFields(req.body), int(req.params.id));
   res.json({ ok: true });
 }));
-app.delete('/api/events/:id', STUDENT, wrap((req, res) => { db.prepare('DELETE FROM events WHERE id = ?').run(int(req.params.id)); res.json({ ok: true }); }));
+app.delete('/api/events/:id', ALL, wrap((req, res) => { db.prepare('DELETE FROM events WHERE id = ?').run(int(req.params.id)); res.json({ ok: true }); }));
 
 // ---------- Rendu de la semaine ----------
 function weekReport(ws) {
