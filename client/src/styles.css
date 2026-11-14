@@ -368,3 +368,15 @@ textarea.input { min-height: 90px; resize: vertical; }
 .dc b { font-family: var(--display); font-size: 1rem; letter-spacing: 0; line-height: 1; }
 .dc.ok { background: var(--green); color: var(--on-green); }
 .dc.miss { background: var(--red); color: var(--on-red); }
+
+/* ---------- Notes : moyenne par matière ---------- */
+.subj-row { display: grid; grid-template-columns: minmax(0, 1.4fr) 1fr 44px; grid-template-areas: "name bar avg" "n bar avg"; align-items: center; column-gap: 10px; width: 100%; text-align: left; padding: 10px 12px; border: 2px solid var(--ink); border-radius: var(--radius); background: var(--paper); cursor: pointer; font: inherit; color: inherit; }
+.subj-row + .subj-row { margin-top: 8px; }
+.subj-name { grid-area: name; display: flex; gap: 6px; align-items: center; min-width: 0; }
+.subj-name b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.subj-n { grid-area: n; }
+.subj-bar { grid-area: bar; height: 12px; border: 2px solid var(--ink); border-radius: 999px; overflow: hidden; }
+.subj-bar > span { display: block; height: 100%; background: var(--ink); transform-origin: left; transition: transform .3s ease-out; }
+.subj-bar > span.ok { background: var(--green); }
+.subj-bar > span.bad { background: var(--red); }
+.subj-avg { grid-area: avg; text-align: right; font-weight: 700; }

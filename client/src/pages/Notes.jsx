@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { api, todayStr, shortDate } from '../lib.js';
 import { useApp, Skeleton, Sheet, Empty, SubjectChips, Flag } from '../ui.jsx';
@@ -73,6 +73,51 @@ function AddGrade({ onClose, onDone, subjectId }) {
   );
 }
 
+// Moyenne générale = moyenne des moyennes de chaque matière (toutes les matières comptent pareil)
+function generalAverage(grades) {
+  const bySubj = {};
+  for (const g of grades) (bySubj[g.subject_id] ||= []).push(g);
+  const avgs = Object.values(bySubj).map(average).filter((a) => a != null);
+  return avgs.length ? avgs.reduce((x, y) => x + y, 0) / avgs.length : null;
+}
+// Évolution : moyenne générale recalculée à chaque nouvelle note
+function generalHistory(grades) {
+  const dates = [...new Set(grades.map((g) => g.date))].sort();
+  return dates.map((d, i) => ({ id: `g${i}`, date: d, value: Math.round(generalAverage(grades.filter((g) => g.date <= d)) * 100) / 100, out_of: 20, coef: 1 }));
+}
+
+function General({ grades, subjects, onPick }) {
+  const gen = generalAverage(grades);
+  const hist = generalHistory(grades);
+  const rows = subjects.map((s) => ({ s, list: grades.filter((g) => g.subject_id === s.id) })).map((r) => ({ ...r, avg: average(r.list) }));
+  return (
+    <>
+      <div className="panel section">
+        <div className="row">
+          <div className="grow">
+            <div className="small muted">Moyenne générale</div>
+            <div className="row"><span className="stat" style={{ fontSize: '2.8rem' }}>{gen == null ? '—' : gen.toFixed(2)}</span>{gen != null && gen >= 12 && <Flag ok>Bien</Flag>}{gen != null && gen < 10 && <Flag>Sous 10</Flag>}</div>
+          </div>
+          <span className="small muted">{rows.filter((r) => r.avg != null).length} matière{rows.filter((r) => r.avg != null).length > 1 ? 's' : ''} notée{rows.filter((r) => r.avg != null).length > 1 ? 's' : ''}</span>
+        </div>
+        {hist.length > 1 && <><div className="small muted" style={{ marginTop: 8 }}>Évolution après chaque note</div><Curve grades={hist} /></>}
+      </div>
+      <div className="section">
+        <div className="section-head"><h2 className="h2">Par matière</h2><span className="aside">touche pour le détail</span></div>
+        {rows.map(({ s, list, avg }) => (
+          <button key={s.id} className="subj-row" onClick={() => onPick(s.id)}>
+            <span className="subj-name"><b>{s.name}</b>{s.is_spe ? <span className="tag">spé</span> : null}</span>
+            <span className="subj-bar"><span style={{ transform: `scaleX(${avg == null ? 0 : avg / 20})` }} className={avg == null ? '' : avg >= 12 ? 'ok' : avg < 10 ? 'bad' : ''} /></span>
+            <span className="mono subj-avg">{avg == null ? '—' : avg.toFixed(1)}</span>
+            <span className="small muted subj-n">{list.length ? `${list.length} note${list.length > 1 ? 's' : ''}` : 'aucune'}</span>
+          </button>
+        ))}
+        <div className="small muted" style={{ marginTop: 8 }}>Chaque matière compte pareil dans la moyenne générale ; dans une matière, les notes sont pondérées par leur coefficient.</div>
+      </div>
+    </>
+  );
+}
+
 export default function Notes() {
   const { subjects, toast } = useApp();
   const [grades, setGrades] = useState(null);
@@ -81,8 +126,7 @@ export default function Notes() {
   const load = useCallback(() => api('/grades').then(setGrades).catch((e) => toast(e.message, 'red')), [toast]);
   useEffect(() => { load(); }, [load]);
 
-  const withGrades = useMemo(() => subjects.filter((s) => grades?.some((g) => g.subject_id === s.id)), [subjects, grades]);
-  const current = subj ?? withGrades[0]?.id ?? subjects[0]?.id;
+  const current = subj ?? 'general';
   const list = (grades || []).filter((g) => g.subject_id === current);
   const avg = average(list);
 
@@ -94,7 +138,10 @@ export default function Notes() {
       {!grades ? <Skeleton /> : (
         <>
           <div className="tabs section" style={{ marginTop: 14 }}>
-            {subjects.filter((s) => s.is_spe || withGrades.includes(s)).map((s) => {
+            <button className={`chip ${current === 'general' ? 'on' : ''}`} style={{ whiteSpace: 'nowrap' }} onClick={() => setSubj('general')}>
+              Générale{generalAverage(grades) != null && <span className="mono" style={{ marginLeft: 6, opacity: 0.8 }}>{generalAverage(grades).toFixed(1)}</span>}
+            </button>
+            {subjects.map((s) => {
               const a = average(grades.filter((g) => g.subject_id === s.id));
               return (
                 <button key={s.id} className={`chip ${current === s.id ? 'on' : ''}`} style={{ whiteSpace: 'nowrap' }} onClick={() => setSubj(s.id)}>
@@ -103,7 +150,7 @@ export default function Notes() {
               );
             })}
           </div>
-          {list.length === 0 ? <div className="section"><Empty sfx="PAS DE NOTE">Ajoute ta première note de DS avec le bouton « Note ».</Empty></div> : (
+          {current === 'general' ? <General grades={grades} subjects={subjects} onPick={setSubj} /> : list.length === 0 ? <div className="section"><Empty sfx="PAS DE NOTE">Aucune note dans cette matière. Ajoute-la avec le bouton « Note ».</Empty></div> : (
             <>
               <div className="panel section">
                 <div className="row"><div className="grow"><div className="small muted">Moyenne</div><div className="row"><span className="stat">{avg.toFixed(2)}</span>{avg >= 12 && <Flag ok>Bien</Flag>}{avg < 10 && <Flag>Sous 10</Flag>}</div></div><span className="small muted">{list.length} note{list.length > 1 ? 's' : ''}</span></div>
@@ -124,7 +171,7 @@ export default function Notes() {
           )}
         </>
       )}
-      {adding && <AddGrade subjectId={current} onClose={() => setAdding(false)} onDone={load} />}
+      {adding && <AddGrade subjectId={current === 'general' ? null : current} onClose={() => setAdding(false)} onDone={load} />}
     </div>
   );
 }

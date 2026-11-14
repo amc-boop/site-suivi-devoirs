@@ -52,7 +52,7 @@ Sans clé, l'onglet Quiz affiche « Quiz pas encore activé » et rien ne casse.
 - **Rendu** : en premier le **rendu du jour** (tâches du jour à cocher ou à prouver par photo, puis « Valider ma journée ») ; en dessous le **rendu de la semaine**, à envoyer le week-end aux parents qui le **valident** ou le renvoient **« à revoir »** avec un commentaire (il peut alors corriger et le renvoyer). Les journées validées s'affichent jour par jour.
 - **Bilan** (parents) : % de la semaine, historique en graphique, photos, retards, validation du rendu de la semaine (« Valider » ou « À revoir » + commentaire), journées validées. Les parents peuvent aussi ajouter des tâches (marquées « parents », lui seul les coche), des DS et devoirs dans l'agenda, et modifier l'emploi du temps.
 - **Récompenses** par paliers : X semaines de suite à Y %, +N points de moyenne dans une matière, ou objectif libre.
-- **Notes** de DS avec courbe et moyenne par matière.
+- **Notes** : toutes les matières (pas seulement les spés), courbe et moyenne par matière, et un onglet **Moyenne générale** (moyenne des moyennes de chaque matière) avec son évolution après chaque note.
 - **Réglages** (admin) : éditeur d'emploi du temps, comptes, matières (spé / révision du soir), limites des tâches.
 
 ## Technique
