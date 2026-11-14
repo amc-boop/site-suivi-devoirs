@@ -49,8 +49,8 @@ Sans clé, l'onglet Quiz affiche « Quiz pas encore activé » et rien ne casse.
   - le week-end : un texte du bac de français et un ancien DS à refaire (rotation entre spécialités).
   - Les tâches non faites sont reportées au lendemain 2 fois maximum, puis restent « en retard ».
 - **Agenda** visuel : grille horaire (7 h – 23 h) avec les cours en fond, les DS/devoirs en haut de chaque jour et une zone « À placer ». On glisse une tâche (doigt ou souris) sur l'heure voulue, on la déplace de la même façon, ou on la remet dans « À placer ». Un jour à la fois sur téléphone, la semaine entière sur ordinateur. Toucher une tâche : cocher, durée, retirer l'heure.
-- **Rendu** du week-end : liste de la semaine, cocher ou joindre une photo par tâche, mot pour les parents, « Valider ma semaine ».
-- **Bilan** (parents) : % de la semaine, historique en graphique, photos, retards, bouton « Vu » + commentaire. Les parents peuvent aussi ajouter des tâches (marquées « parents », lui seul les coche), des DS et devoirs dans l'agenda, et modifier l'emploi du temps.
+- **Rendu** : en premier le **rendu du jour** (tâches du jour à cocher ou à prouver par photo, puis « Valider ma journée ») ; en dessous le **rendu de la semaine**, à envoyer le week-end aux parents qui le **valident** ou le renvoient **« à revoir »** avec un commentaire (il peut alors corriger et le renvoyer). Les journées validées s'affichent jour par jour.
+- **Bilan** (parents) : % de la semaine, historique en graphique, photos, retards, validation du rendu de la semaine (« Valider » ou « À revoir » + commentaire), journées validées. Les parents peuvent aussi ajouter des tâches (marquées « parents », lui seul les coche), des DS et devoirs dans l'agenda, et modifier l'emploi du temps.
 - **Récompenses** par paliers : X semaines de suite à Y %, +N points de moyenne dans une matière, ou objectif libre.
 - **Notes** de DS avec courbe et moyenne par matière.
 - **Réglages** (admin) : éditeur d'emploi du temps, comptes, matières (spé / révision du soir), limites des tâches.

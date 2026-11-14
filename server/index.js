@@ -252,21 +252,46 @@ function weekReport(ws) {
   const we = addDays(ws, 6);
   const tasks = db.prepare(`${taskRow} WHERE t.original_date BETWEEN ? AND ? ORDER BY t.original_date, t.id`).all(ws, we);
   const report = db.prepare(`SELECT r.*, u.display_name AS seen_by_name FROM weekly_reports r LEFT JOIN users u ON u.id = r.seen_by WHERE week_start = ?`).get(ws) || null;
-  return { week_start: ws, today: today(), stats: weekStats(ws), report, tasks };
+  const days = db.prepare('SELECT date, submitted_at FROM daily_reports WHERE date BETWEEN ? AND ? ORDER BY date').all(ws, we);
+  return { week_start: ws, today: today(), stats: weekStats(ws), report, tasks, dayReports: days };
 }
+
+// ---------- Rendu du jour ----------
+function dayReport(D) {
+  const tasks = sortTasks(db.prepare(`${taskRow} WHERE t.date = ?`).all(D));
+  const report = db.prepare('SELECT * FROM daily_reports WHERE date = ?').get(D) || null;
+  return { date: D, today: today(), tasks, report };
+}
+app.get('/api/day-report', ALL, wrap((req, res) => {
+  const D = isDate(req.query.date) ? req.query.date : today();
+  if (D <= today()) ensureUpTo();
+  res.json(dayReport(D));
+}));
+app.post('/api/day-report/submit', STUDENT, wrap((req, res) => {
+  const D = isDate(req.body.date) ? req.body.date : today();
+  if (D > today()) throw fail(400, 'On ne peut pas valider une journée à venir.');
+  db.prepare(`INSERT INTO daily_reports(date, submitted_at, comment) VALUES (?,?,?)
+    ON CONFLICT(date) DO UPDATE SET submitted_at = excluded.submitted_at, comment = excluded.comment`)
+    .run(D, new Date().toISOString(), str(req.body.comment, 500));
+  res.json(dayReport(D));
+}));
 app.get('/api/report', ALL, wrap((req, res) => res.json(weekReport(weekStart(isDate(req.query.week) ? req.query.week : today())))));
 app.post('/api/report/submit', STUDENT, wrap((req, res) => {
   const ws = weekStart(isDate(req.body.week) ? req.body.week : today());
   db.prepare(`INSERT INTO weekly_reports(week_start, submitted_at, student_comment) VALUES (?,?,?)
-    ON CONFLICT(week_start) DO UPDATE SET submitted_at = excluded.submitted_at, student_comment = excluded.student_comment`)
+    ON CONFLICT(week_start) DO UPDATE SET submitted_at = excluded.submitted_at, student_comment = excluded.student_comment,
+      status = CASE WHEN status = 'a_revoir' THEN NULL ELSE status END`)
     .run(ws, new Date().toISOString(), str(req.body.comment, 1000));
   res.json(weekReport(ws));
 }));
+// Les parents valident le rendu de la semaine, ou le renvoient « à revoir » avec un commentaire
 app.post('/api/report/seen', PARENT, wrap((req, res) => {
   const ws = weekStart(isDate(req.body.week) ? req.body.week : today());
-  db.prepare(`INSERT INTO weekly_reports(week_start, seen_at, seen_by, parent_comment) VALUES (?,?,?,?)
-    ON CONFLICT(week_start) DO UPDATE SET seen_at = excluded.seen_at, seen_by = excluded.seen_by, parent_comment = excluded.parent_comment`)
-    .run(ws, new Date().toISOString(), req.user.id, str(req.body.comment, 1000));
+  const status = req.body.status === 'a_revoir' ? 'a_revoir' : 'validee';
+  if (status === 'a_revoir' && !str(req.body.comment)) throw fail(400, 'Ajoute un commentaire pour dire ce qu’il faut revoir.');
+  if (!db.prepare('SELECT submitted_at FROM weekly_reports WHERE week_start = ?').get(ws)?.submitted_at) throw fail(400, "Le rendu de cette semaine n'a pas encore été envoyé.");
+  db.prepare(`UPDATE weekly_reports SET seen_at = ?, seen_by = ?, parent_comment = ?, status = ? WHERE week_start = ?`)
+    .run(new Date().toISOString(), req.user.id, str(req.body.comment, 1000), status, ws);
   res.json(weekReport(ws));
 }));
 
@@ -278,9 +303,9 @@ app.get('/api/overview', ALL, wrap((req, res) => {
   for (let i = 0; i < 12; i++) {
     const ws = addDays(cur, -7 * i);
     const s = weekStats(ws);
-    const r = db.prepare('SELECT submitted_at, seen_at, parent_comment FROM weekly_reports WHERE week_start = ?').get(ws);
+    const r = db.prepare('SELECT submitted_at, seen_at, parent_comment, status FROM weekly_reports WHERE week_start = ?').get(ws);
     if (s.total === 0 && !r && i > 0) continue;
-    weeks.push({ ...s, submitted_at: r?.submitted_at ?? null, seen_at: r?.seen_at ?? null, parent_comment: r?.parent_comment ?? '' });
+    weeks.push({ ...s, submitted_at: r?.submitted_at ?? null, seen_at: r?.seen_at ?? null, parent_comment: r?.parent_comment ?? '', status: r?.status ?? null });
   }
   const lateTasks = db.prepare(`${taskRow} WHERE t.done_at IS NULL AND t.date < ? AND t.original_date >= ? ORDER BY t.date DESC LIMIT 30`).all(today(), addDays(today(), -14));
   const nextExams = db.prepare(`SELECT e.*, s.name AS subject_name FROM events e LEFT JOIN subjects s ON s.id = e.subject_id

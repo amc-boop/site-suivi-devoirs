@@ -361,3 +361,10 @@ textarea.input { min-height: 90px; resize: vertical; }
 .kpi-ok { background: var(--green); color: var(--on-green); }
 .kpi-ok .kpi-sub { color: var(--on-green); }
 @media (min-width: 768px) { .kpi-grid { grid-template-columns: 1.6fr 1fr 1fr; } .kpi-wide { grid-row: span 2; } }
+
+/* ---------- Rendu : journées validées ---------- */
+.days-check { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.dc { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 5px 0; border: 2px solid var(--ink); border-radius: 6px; background: var(--paper); font-size: .7rem; text-transform: uppercase; letter-spacing: .04em; }
+.dc b { font-family: var(--display); font-size: 1rem; letter-spacing: 0; line-height: 1; }
+.dc.ok { background: var(--green); color: var(--on-green); }
+.dc.miss { background: var(--red); color: var(--on-red); }

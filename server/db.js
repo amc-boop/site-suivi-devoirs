@@ -76,6 +76,11 @@ CREATE TABLE IF NOT EXISTS weekly_reports (
   seen_by INTEGER REFERENCES users(id),
   parent_comment TEXT DEFAULT ''
 );
+CREATE TABLE IF NOT EXISTS daily_reports (
+  date TEXT PRIMARY KEY,
+  submitted_at TEXT NOT NULL,
+  comment TEXT DEFAULT ''
+);
 CREATE TABLE IF NOT EXISTS grades (
   id INTEGER PRIMARY KEY,
   subject_id INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
@@ -129,6 +134,9 @@ if (!evSql.includes("'bac',")) {
 }
 const taskCols = db.prepare('PRAGMA table_info(tasks)').all().map((c) => c.name);
 if (!taskCols.includes('time')) db.exec('ALTER TABLE tasks ADD COLUMN time TEXT');
+// Validation du rendu de la semaine par les parents : 'validee' ou 'a_revoir'
+const repCols = db.prepare('PRAGMA table_info(weekly_reports)').all().map((c) => c.name);
+if (!repCols.includes('status')) db.exec('ALTER TABLE weekly_reports ADD COLUMN status TEXT');
 if (!taskCols.includes('duration')) db.exec('ALTER TABLE tasks ADD COLUMN duration INTEGER NOT NULL DEFAULT 30');
 
 export const getSetting = (key, def) => {

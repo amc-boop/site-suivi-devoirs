@@ -41,7 +41,7 @@ const TIMETABLE = [
 export async function seed({ demo }) {
   const { db, tx, DB_PATH } = await import('./db.js');
   tx(() => {
-    for (const t of ['quizzes', 'rewards', 'grades', 'weekly_reports', 'generated_days', 'tasks', 'events', 'timetable', 'subjects', 'sessions', 'users']) db.exec(`DELETE FROM ${t}`);
+    for (const t of ['quizzes', 'rewards', 'grades', 'daily_reports', 'weekly_reports', 'generated_days', 'tasks', 'events', 'timetable', 'subjects', 'sessions', 'users']) db.exec(`DELETE FROM ${t}`);
     for (const a of DEFAULT_ACCOUNTS) {
       db.prepare('INSERT INTO users(username, display_name, role, password_hash) VALUES (?,?,?,?)').run(a.username, a.display_name, a.role, hashPassword(a.password));
     }
@@ -79,13 +79,17 @@ export async function seed({ demo }) {
     }
   }
   const ws = weekStart(T);
-  db.prepare(`INSERT INTO weekly_reports(week_start, submitted_at, student_comment, seen_at, seen_by, parent_comment) VALUES (?,?,?,?,?,?)`)
+  db.prepare(`INSERT INTO weekly_reports(week_start, submitted_at, student_comment, seen_at, seen_by, parent_comment, status) VALUES (?,?,?,?,?,?, 'validee')`)
     .run(addDays(ws, -21), `${addDays(ws, -16)}T20:00:00.000Z`, 'DS de maths refait en entier.', `${addDays(ws, -15)}T10:00:00.000Z`, 3, 'Très bien, continue comme ça.');
-  db.prepare(`INSERT INTO weekly_reports(week_start, submitted_at, student_comment, seen_at, seen_by, parent_comment) VALUES (?,?,?,?,?,?)`)
+  db.prepare(`INSERT INTO weekly_reports(week_start, submitted_at, student_comment, seen_at, seen_by, parent_comment, status) VALUES (?,?,?,?,?,?, 'validee')`)
     .run(addDays(ws, -14), `${addDays(ws, -9)}T20:00:00.000Z`, '', `${addDays(ws, -8)}T11:00:00.000Z`, 3, 'Super semaine !');
   db.prepare(`INSERT INTO weekly_reports(week_start, submitted_at, student_comment) VALUES (?,?,?)`)
     .run(addDays(ws, -7), `${addDays(ws, -2)}T21:00:00.000Z`, 'Semaine chargée avec le DS de physique.');
 
+  // Rendus du jour : la plupart des soirs des 3 dernières semaines
+  for (let d = addDays(ws, -21); d < T; d = addDays(d, 1)) {
+    if (diffDays(addDays(ws, -21), d) % 5 !== 3) db.prepare('INSERT INTO daily_reports(date, submitted_at) VALUES (?,?)').run(d, `${d}T20:30:00.000Z`);
+  }
   const g = (subj, d, title, v, coef = 1) => db.prepare('INSERT INTO grades(subject_id,date,title,value,out_of,coef) VALUES (?,?,?,?,20,?)').run(sid[subj], addDays(T, d), title, v, coef);
   g('MATH', -60, 'DS 1 : fonctions', 9.5); g('MATH', -40, 'DS 2 : suites', 11); g('MATH', -23, 'DS 3 : second degré', 10.5);
   g('SES', -55, 'DS 1 : la science économique', 12); g('SES', -16, 'DS 2 : marchés', 13.5);
