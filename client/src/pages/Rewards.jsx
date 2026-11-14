@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Gift, Plus, Trash2, Check } from 'lucide-react';
 import { api } from '../lib.js';
-import { useApp, Skeleton, Sheet, Bar, Empty, SubjectChips } from '../ui.jsx';
+import { useApp, Skeleton, Sheet, Bar, Empty, SubjectChips, Flag } from '../ui.jsx';
 
 function NewReward({ onClose, onDone }) {
   const { toast } = useApp();
@@ -76,7 +76,7 @@ export default function Rewards() {
             <div className="row">
               <Gift size={22} />
               <div className="grow"><b style={{ fontSize: '1.1rem' }}>{r.prize || r.title}</b><div className="small muted">{r.title}</div></div>
-              {r.given_at ? <span className="tag">donnée</span> : r.progress.reached ? <span className="tag solid" style={{ background: 'var(--green)', borderColor: 'var(--green)' }}>DÉBLOQUÉE</span> : null}
+              {r.given_at ? <span className="tag">donnée</span> : r.progress.reached ? <Flag ok>Débloquée</Flag> : null}
             </div>
             <div className="small" style={{ margin: '8px 0 6px' }}>{r.progress.label}</div>
             {r.rule !== 'manuel' && <Bar value={(Math.max(0, r.progress.current) / r.progress.target) * 100} />}

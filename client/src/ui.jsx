@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Camera, X, BookOpen, FileText, RotateCcw, PenLine, CalendarPlus, Plus, Trash2, CalendarClock } from 'lucide-react';
+import { Check, Camera, X, BookOpen, FileText, RotateCcw, PenLine, CalendarPlus, Plus, Trash2, CalendarClock, CircleCheck, TriangleAlert } from 'lucide-react';
 import { api, addDays, todayStr, weekday, shortDate, KIND_LABEL, EVENT_LABEL, DAYS } from './lib.js';
 
 export const AppCtx = createContext(null);
@@ -46,9 +46,20 @@ export function Lightbox({ src, onClose }) {
   return createPortal(<div className="lightbox" onClick={onClose} role="dialog" aria-label="Photo"><img src={src} alt="Photo jointe" /></div>, document.body);
 }
 
+// Pourcentage : le chiffre reste à l'encre, la pastille de couleur porte le sens (icône + libellé)
 export function Pct({ value }) {
   if (value == null) return <span className="pct muted">—</span>;
-  return <span className={`pct ${value >= 80 ? 'green' : value < 50 ? 'red' : ''}`}>{value}%</span>;
+  return (
+    <span className="pct-wrap">
+      <span className="pct">{value}%</span>
+      {value >= 80 && <Flag ok>Objectif</Flag>}
+      {value < 50 && <Flag>Trop bas</Flag>}
+    </span>
+  );
+}
+
+export function Flag({ ok, children }) {
+  return <span className={`flag ${ok ? 'ok' : 'bad'}`}>{ok ? <CircleCheck size={14} /> : <TriangleAlert size={14} />}{children}</span>;
 }
 
 export function Bar({ value, color }) {
@@ -114,8 +125,8 @@ export function TaskItem({ task, onChange, readOnly, showDate, allowPhoto, allow
           {task.subject_short && <span className="tag">{task.subject_short}</span>}
           <span>{KIND_LABEL[task.kind] || 'Tâche'}</span>
           {showDate && <span>{shortDate(task.original_date)}</span>}
-          {task.carried > 0 && <span className="tag red">reportée {task.carried}×</span>}
-          {late && <span className="tag solid red">en retard</span>}
+          {task.carried > 0 && !late && <span className="tag">reportée {task.carried}×</span>}
+          {late && <span className="tag solid red"><TriangleAlert size={12} /> en retard</span>}
         </div>
       </div>
       {task.photo && <img className="photo-thumb" src={`/uploads/${task.photo}`} alt="" onClick={() => setZoom(`/uploads/${task.photo}`)} />}

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, Send, Gift, AlertTriangle, ChevronRight } from 'lucide-react';
+import { Plus, Send, Gift, TriangleAlert, ChevronRight, CircleCheck } from 'lucide-react';
 import { api, dayLabel, relDays, weekday, EVENT_LABEL, shortDate } from '../lib.js';
-import { useApp, TaskItem, AddSheet, Skeleton, Empty, Bar } from '../ui.jsx';
+import { useApp, TaskItem, AddSheet, Skeleton, Empty, Bar, Flag } from '../ui.jsx';
 
 export function Countdown({ exams }) {
   if (!exams?.length) {
@@ -68,15 +68,15 @@ export default function Today() {
           <div className="h1">Ce soir</div>
         </div>
         <div className="counter">
-          <span className={`num ${allDone ? '' : ''}`} style={{ color: allDone ? 'var(--green)' : undefined }}>{done}/{total}</span>
+          <span className="num">{done}/{total}</span>
         </div>
       </div>
       <div style={{ marginTop: 8 }}><Bar value={total ? (done / total) * 100 : 0} color={allDone ? 'green' : ''} /></div>
 
       {allDone && (
-        <div className="panel green" style={{ marginTop: 14, textAlign: 'center' }}>
-          <div className="h1" style={{ color: 'var(--green)', transform: 'rotate(-2deg)' }}>TOUT EST FAIT !</div>
-          <div className="small">Soirée libre. Cette semaine : {data.week.pct ?? 0} % des tâches faites.</div>
+        <div className="alert ok" style={{ marginTop: 14 }} role="status">
+          <CircleCheck size={30} />
+          <div><span className="sfx-title">TOUT EST FAIT !</span><div className="small">Soirée libre. Cette semaine : {data.week.pct ?? 0} % des tâches faites.</div></div>
         </div>
       )}
 
@@ -88,9 +88,9 @@ export default function Today() {
 
       {lateOpen.length > 0 && (
         <div className="section">
-          <button className="panel red flat row" style={{ width: '100%', cursor: 'pointer' }} onClick={() => setShowLate((v) => !v)} aria-expanded={showLate}>
-            <AlertTriangle size={20} color="var(--red)" />
-            <span className="grow" style={{ textAlign: 'left', fontWeight: 700 }}>{lateOpen.length} tâche{lateOpen.length > 1 ? 's' : ''} en retard</span>
+          <button className="alert bad" style={{ cursor: 'pointer' }} onClick={() => setShowLate((v) => !v)} aria-expanded={showLate}>
+            <TriangleAlert size={24} />
+            <span className="grow"><span className="sfx-title" style={{ fontSize: '1.3rem' }}>EN RETARD !</span><span className="small" style={{ display: 'block' }}>{lateOpen.length} tâche{lateOpen.length > 1 ? 's' : ''} à rattraper</span></span>
             <ChevronRight size={18} style={{ transform: showLate ? 'rotate(90deg)' : '' }} />
           </button>
           {showLate && <div style={{ marginTop: 10 }}>{lateOpen.map((t) => <TaskItem key={t.id} task={t} onChange={onTask} showDate />)}</div>}
@@ -135,7 +135,7 @@ export default function Today() {
           <div className="stack">
             {rewards.slice(0, 3).map((r) => (
               <div key={r.id} className={`panel flat ${r.progress.reached ? 'green' : ''}`}>
-                <div className="row"><Gift size={18} /><b className="grow">{r.prize || r.title}</b>{r.progress.reached && <span className="tag solid" style={{ background: 'var(--green)', borderColor: 'var(--green)' }}>DÉBLOQUÉE</span>}</div>
+                <div className="row"><Gift size={18} /><b className="grow">{r.prize || r.title}</b>{r.progress.reached && <Flag ok>Débloquée</Flag>}</div>
                 <div className="small muted" style={{ margin: '4px 0 6px' }}>{r.progress.label}</div>
                 {r.rule !== 'manuel' && <Bar value={(Math.max(0, r.progress.current) / r.progress.target) * 100} />}
               </div>

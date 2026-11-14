@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { api, todayStr, shortDate } from '../lib.js';
-import { useApp, Skeleton, Sheet, Empty, SubjectChips } from '../ui.jsx';
+import { useApp, Skeleton, Sheet, Empty, SubjectChips, Flag } from '../ui.jsx';
 
 const on20 = (g) => (g.value / g.out_of) * 20;
 const average = (list) => { const c = list.reduce((s, g) => s + g.coef, 0); return c ? list.reduce((s, g) => s + on20(g) * g.coef, 0) / c : null; };
@@ -28,8 +28,8 @@ function Curve({ grades }) {
         const col = v >= 12 ? 'var(--green)' : v < 10 ? 'var(--red)' : 'var(--ink)';
         return (
           <g key={grades[i].id}>
-            <circle cx={x} cy={y} r="6" fill="var(--paper)" stroke={col} strokeWidth="3" />
-            <text x={x} y={y - 11} textAnchor="middle" fontSize="11" fontWeight="700" fill={col}>{Math.round(v * 10) / 10}</text>
+            <circle cx={x} cy={y} r="7" fill={col === 'var(--ink)' ? 'var(--paper)' : col} stroke="var(--ink)" strokeWidth="2.5" />
+            <text x={x} y={y - 12} textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--ink)">{Math.round(v * 10) / 10}</text>
             <text x={x} y={H + 14} textAnchor="middle" fontSize="9" fill="var(--muted)">{grades[i].date.slice(8)}/{grades[i].date.slice(5, 7)}</text>
           </g>
         );
@@ -106,7 +106,7 @@ export default function Notes() {
           {list.length === 0 ? <div className="section"><Empty sfx="PAS DE NOTE">Ajoute ta première note de DS avec le bouton « Note ».</Empty></div> : (
             <>
               <div className="panel section">
-                <div className="row"><div className="grow"><div className="small muted">Moyenne</div><div className="stat" style={{ color: avg >= 12 ? 'var(--green)' : avg < 10 ? 'var(--red)' : undefined }}>{avg.toFixed(2)}</div></div><span className="small muted">{list.length} note{list.length > 1 ? 's' : ''}</span></div>
+                <div className="row"><div className="grow"><div className="small muted">Moyenne</div><div className="row"><span className="stat">{avg.toFixed(2)}</span>{avg >= 12 && <Flag ok>Bien</Flag>}{avg < 10 && <Flag>Sous 10</Flag>}</div></div><span className="small muted">{list.length} note{list.length > 1 ? 's' : ''}</span></div>
                 <Curve grades={list} />
               </div>
               <table className="table section">

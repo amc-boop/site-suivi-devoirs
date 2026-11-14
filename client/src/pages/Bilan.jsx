@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Eye, Camera, AlertTriangle, ChevronRight } from 'lucide-react';
+import { Eye, Camera, TriangleAlert, ChevronRight } from 'lucide-react';
 import { api, weekLabel, shortDate, EVENT_LABEL } from '../lib.js';
-import { useApp, Skeleton, Sheet, Pct, Bar, Lightbox, Empty } from '../ui.jsx';
+import { useApp, Skeleton, Sheet, Pct, Bar, Lightbox, Empty, Flag } from '../ui.jsx';
 import { WeekTasks } from './Rendu.jsx';
 
 function WeeksChart({ weeks }) {
@@ -10,14 +10,13 @@ function WeeksChart({ weeks }) {
   const W = 320, H = 120, bw = Math.min(36, (W - 20) / list.length - 8);
   return (
     <svg viewBox={`0 0 ${W} ${H + 22}`} width="100%" role="img" aria-label="Pourcentage de tâches faites par semaine">
-      <line x1="0" x2={W} y1={H - H * 0.8} y2={H - H * 0.8} stroke="var(--green)" strokeDasharray="4 4" strokeWidth="1.5" />
-      <text x={W} y={H - H * 0.8 - 4} textAnchor="end" fontSize="10" fill="var(--green)">80 %</text>
+      <line x1="0" x2={W} y1={H - H * 0.8} y2={H - H * 0.8} stroke="var(--ink)" strokeDasharray="4 4" strokeWidth="1.5" />
       {list.map((w, i) => {
         const x = 10 + i * ((W - 20) / list.length) + 4, h = (H * (w.pct || 0)) / 100;
         const color = w.pct >= 80 ? 'var(--green)' : w.pct < 50 ? 'var(--red)' : 'var(--ink)';
         return (
           <g key={w.week_start}>
-            <rect x={x} y={H - h} width={bw} height={h} fill={color} rx="3" />
+            <rect x={x} y={H - h} width={bw} height={h} fill={color} stroke="var(--ink)" strokeWidth="2" rx="3" />
             <text x={x + bw / 2} y={H - h - 4} textAnchor="middle" fontSize="10" fontWeight="700" fill="var(--ink)">{w.pct}</text>
             <text x={x + bw / 2} y={H + 14} textAnchor="middle" fontSize="9" fill="var(--muted)">{w.week_start.slice(8)}/{w.week_start.slice(5, 7)}</text>
           </g>
@@ -53,7 +52,7 @@ function WeekDetail({ ws, onClose, onSeen }) {
           </div>
           {d.report?.submitted_at
             ? <div className="small"><b>Rendu envoyé</b> le {new Date(d.report.submitted_at).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
-            : <div className="small" style={{ color: 'var(--red)', fontWeight: 700 }}>Rendu pas encore envoyé</div>}
+            : <div className="small warn-text"><TriangleAlert size={16} /> Rendu pas encore envoyé</div>}
           {d.report?.student_comment && <div className="speech">{d.report.student_comment}</div>}
 
           {photos.length > 0 && (
@@ -64,7 +63,7 @@ function WeekDetail({ ws, onClose, onSeen }) {
               </div>
             </div>
           )}
-          {late.length > 0 && <div className="small" style={{ color: 'var(--red)', fontWeight: 700 }}>{late.length} tâche{late.length > 1 ? 's' : ''} non faite{late.length > 1 ? 's' : ''}</div>}
+          {late.length > 0 && <div className="small warn-text"><TriangleAlert size={16} /> {late.length} tâche{late.length > 1 ? 's' : ''} non faite{late.length > 1 ? 's' : ''}</div>}
 
           {canAct && (
             <div className="panel">
@@ -98,7 +97,7 @@ export default function Bilan() {
 
       {toSee.length > 0 && (
         <button className="panel red row section" style={{ width: '100%', cursor: 'pointer', textAlign: 'left' }} onClick={() => setOpen(toSee[0].week_start)}>
-          <Eye size={22} color="var(--red)" />
+          <Eye size={22} />
           <div className="grow"><b>Rendu à regarder</b><div className="small muted">Semaine {weekLabel(toSee[0].week_start)}</div></div>
           <ChevronRight />
         </button>
@@ -112,7 +111,8 @@ export default function Bilan() {
         </div>
         <div className={`panel tilt-r ${data.lateTasks.length ? 'red' : 'green'}`}>
           <div className="small muted">En retard (14 j)</div>
-          <div className="stat" style={{ color: data.lateTasks.length ? 'var(--red)' : 'var(--green)' }}>{data.lateTasks.length}</div>
+          <div className="stat">{data.lateTasks.length}</div>
+          <div style={{ marginTop: 4 }}>{data.lateTasks.length ? <Flag>À rattraper</Flag> : <Flag ok>Aucun</Flag>}</div>
         </div>
       </div>
 
@@ -127,7 +127,7 @@ export default function Bilan() {
       </div>
 
       <div className="section">
-        <div className="section-head"><h2 className="h2">Historique</h2><span className="aside">% de tâches faites</span></div>
+        <div className="section-head"><h2 className="h2">Historique</h2><span className="aside">% de tâches faites (pointillés : 80 %)</span></div>
         <div className="panel flat"><WeeksChart weeks={data.weeks} /></div>
         <div style={{ marginTop: 12 }}>
           {data.weeks.map((w) => (
@@ -137,9 +137,9 @@ export default function Bilan() {
                 <div className="t-meta" style={{ marginTop: 4 }}>
                   <span>{w.done}/{w.total} faites</span>
                   {w.photos > 0 && <span className="row" style={{ gap: 3 }}><Camera size={13} />{w.photos}</span>}
-                  {w.late > 0 && <span className="tag red">{w.late} en retard</span>}
-                  {w.submitted_at ? <span className="tag">rendu</span> : <span className="tag red">pas rendu</span>}
-                  {w.seen_at && <span className="tag green">vu</span>}
+                  {w.late > 0 && <span className="tag"><TriangleAlert size={12} /> {w.late} en retard</span>}
+                  {w.submitted_at ? <span className="tag">rendu</span> : <span className="tag red"><TriangleAlert size={12} /> pas rendu</span>}
+                  {w.seen_at && <span className="tag green"><Eye size={12} /> vu</span>}
                 </div>
               </div>
               <Pct value={w.pct} />
@@ -153,7 +153,7 @@ export default function Bilan() {
         {data.lateTasks.length === 0 ? <Empty sfx="RAS !">Aucune tâche en retard.</Empty> : (
           <div className="panel flat">
             {data.lateTasks.slice(0, 12).map((t) => (
-              <div className="slot" key={t.id}><span className="time">{shortDate(t.original_date)}</span><div className="row"><AlertTriangle size={14} color="var(--red)" /><span>{t.title}</span></div></div>
+              <div className="slot" key={t.id}><span className="time">{shortDate(t.original_date)}</span><div className="row"><TriangleAlert size={14} color="var(--red)" /><span>{t.title}</span></div></div>
             ))}
           </div>
         )}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Sun, CalendarDays, Send, LineChart, Brain, ClipboardCheck, Gift, Settings, LogOut, UserRound } from 'lucide-react';
+import { Sun, CalendarDays, Send, LineChart, Brain, ClipboardCheck, Gift, Settings, LogOut, UserRound, CircleCheck, TriangleAlert } from 'lucide-react';
 import { api, ROLE_LABEL } from './lib.js';
 import { AppCtx, Skeleton } from './ui.jsx';
 import Login from './pages/Login.jsx';
@@ -75,7 +75,7 @@ export default function App() {
             </a>
           ))}
         </nav>
-        {toastMsg && <div key={toastMsg.id} className={`toast ${toastMsg.tone || ''}`} role="status">{toastMsg.msg}</div>}
+        {toastMsg && <div key={toastMsg.id} className={`toast ${toastMsg.tone || ''}`} role="status">{toastMsg.tone === 'red' ? <TriangleAlert size={18} /> : <CircleCheck size={18} />}{toastMsg.msg}</div>}
       </div>
     </AppCtx.Provider>
   );

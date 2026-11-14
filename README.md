@@ -58,7 +58,7 @@ Sans clé, l'onglet Quiz affiche « Quiz pas encore activé » et rien ne casse.
 ## Technique
 
 - `server/` : API Express + SQLite intégré à Node (`node:sqlite`), sessions par cookie, photos dans `data/uploads/`.
-- `client/` : React + Vite, PWA (manifest + service worker), style manga noir et blanc (rouge = urgent, vert = positif).
+- `client/` : React + Vite, PWA (manifest + service worker), style manga noir et blanc défini dans `design.md` (rouge #A60321 = urgent, vert #90E098 = positif, toujours avec une icône et un libellé).
 - Production locale : `npm run build && npm start` puis http://localhost:3001
 
 ### Pistes pour la suite

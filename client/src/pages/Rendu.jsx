@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, Eye, Send } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Eye, Send, TriangleAlert } from 'lucide-react';
 import { api, addDays, weekStart, todayStr, weekLabel, dayLabel } from '../lib.js';
 import { useApp, TaskItem, Skeleton, Empty, Bar, Pct } from '../ui.jsx';
 
@@ -59,7 +59,7 @@ export default function Rendu() {
               <Pct value={data.stats.pct} />
             </div>
             <div style={{ marginTop: 8 }}><Bar value={data.stats.pct} /></div>
-            {data.stats.late > 0 && <div className="small" style={{ color: 'var(--red)', fontWeight: 700, marginTop: 8 }}>{data.stats.late} tâche{data.stats.late > 1 ? 's' : ''} pas encore faite{data.stats.late > 1 ? 's' : ''}</div>}
+            {data.stats.late > 0 && <div className="small warn-text" style={{ marginTop: 8 }}><TriangleAlert size={16} /> {data.stats.late} tâche{data.stats.late > 1 ? 's' : ''} pas encore faite{data.stats.late > 1 ? 's' : ''}</div>}
           </div>
 
           <div className="small muted" style={{ marginTop: 12 }}>Coche ce qui est fait. Pour prouver un DS refait ou un exercice, ajoute une photo avec l'appareil.</div>

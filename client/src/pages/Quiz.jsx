@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Camera, Brain, Play, Trash2, X, Lock } from 'lucide-react';
+import { Camera, Brain, Play, Trash2, X, Lock, CircleCheck, TriangleAlert } from 'lucide-react';
 import { api } from '../lib.js';
 import { useApp, Skeleton, Empty, SubjectChips, Bar } from '../ui.jsx';
 
@@ -27,8 +27,9 @@ function Player({ id, onExit }) {
     const pct = Math.round((score / total) * 100);
     return (
       <div className="panel center section">
-        <div className="h1" style={{ color: pct >= 70 ? 'var(--green)' : pct < 50 ? 'var(--red)' : undefined, transform: 'rotate(-3deg)', fontSize: '3rem' }}>
-          {pct >= 70 ? 'BIEN JOUÉ !' : pct >= 50 ? 'PAS MAL !' : 'ON REMET ÇA ?'}
+        <div className={pct >= 70 ? 'alert ok' : pct < 50 ? 'alert bad' : 'alert'} style={{ justifyContent: 'center' }}>
+          {pct >= 70 ? <CircleCheck size={30} /> : pct < 50 ? <TriangleAlert size={30} /> : <Brain size={30} />}
+          <span className="sfx-title" style={{ fontSize: '2.4rem' }}>{pct >= 70 ? 'BIEN JOUÉ !' : pct >= 50 ? 'PAS MAL !' : 'ON REMET ÇA ?'}</span>
         </div>
         <div className="stat" style={{ marginTop: 8 }}>{score} / {total}</div>
         <div className="row" style={{ marginTop: 16, justifyContent: 'center' }}>
@@ -55,7 +56,7 @@ function Player({ id, onExit }) {
       ))}
       {picked != null && (
         <div className={`panel section ${picked === q.bonne ? 'green' : 'red'}`}>
-          <b>{picked === q.bonne ? 'Bonne réponse !' : 'Raté.'}</b>
+          <b className="row" style={{ gap: 6 }}>{picked === q.bonne ? <><CircleCheck size={18} /> Bonne réponse !</> : <><TriangleAlert size={18} /> Raté.</>}</b>
           <div className="small" style={{ marginTop: 4 }}>{q.explication}</div>
           <button className="btn block" style={{ marginTop: 12 }} onClick={next}>{i + 1 < total ? 'Question suivante' : 'Voir mon score'}</button>
         </div>
