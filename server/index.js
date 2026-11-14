@@ -128,7 +128,10 @@ app.patch('/api/settings', ADMIN, wrap((req, res) => {
 
 // ---------- Tâches ----------
 const taskRow = `SELECT t.*, s.name AS subject_name, s.short AS subject_short FROM tasks t LEFT JOIN subjects s ON s.id = t.subject_id`;
-const sortTasks = (list) => list.sort((a, b) => (a.done_at ? 1 : 0) - (b.done_at ? 1 : 0) || priority(a.kind) - priority(b.kind) || a.id - b.id);
+const sortTasks = (list) => list.sort((a, b) => (a.done_at ? 1 : 0) - (b.done_at ? 1 : 0)
+  || (a.time ? 0 : 1) - (b.time ? 0 : 1) || (a.time || '').localeCompare(b.time || '') || priority(a.kind) - priority(b.kind) || a.id - b.id);
+const isTime = (s) => typeof s === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
+const defaultDuration = (kind) => (['ds', 'refaire_ds', 'devoir'].includes(kind) ? 60 : 30);
 
 app.get('/api/today', ALL, wrap((req, res) => {
   const D = today();
@@ -154,12 +157,23 @@ app.post('/api/tasks', ALL, wrap((req, res) => {
   const subject = req.body.subject_id ? Number(req.body.subject_id) : null;
   // Les tâches ajoutées par les parents sont marquées pour que l'élève le voie
   const source = req.user.role === 'parent' ? 'parent' : 'manuel';
-  const r = db.prepare(`INSERT INTO tasks(date, original_date, title, subject_id, kind, source) VALUES (?,?,?,?,?,?)`)
-    .run(date, date, title, subject, kind, source);
+  const r = db.prepare(`INSERT INTO tasks(date, original_date, title, subject_id, kind, source, time, duration) VALUES (?,?,?,?,?,?,?,?)`)
+    .run(date, date, title, subject, kind, source, isTime(req.body.time) ? req.body.time : null, defaultDuration(kind));
   res.json(db.prepare(`${taskRow} WHERE t.id = ?`).get(Number(r.lastInsertRowid)));
 }));
-app.patch('/api/tasks/:id', STUDENT, wrap((req, res) => {
+app.patch('/api/tasks/:id', ALL, wrap((req, res) => {
   const t = db.prepare('SELECT * FROM tasks WHERE id = ?').get(int(req.params.id)); if (!t) throw fail(404, 'Tâche introuvable');
+  // Les parents peuvent placer les tâches dans l'agenda, mais seul l'élève les coche
+  if (req.user.role === 'parent' && ('done' in req.body || req.body.title)) throw fail(403, "Seul l'élève peut cocher ses tâches.");
+  if ('time' in req.body) {
+    if (req.body.time !== null && !isTime(req.body.time)) throw fail(400, 'Heure invalide');
+    db.prepare('UPDATE tasks SET time = ? WHERE id = ?').run(req.body.time, t.id);
+  }
+  if (req.body.duration != null) {
+    const d = Number(req.body.duration);
+    if (!(d >= 15 && d <= 240)) throw fail(400, 'Durée invalide (15 à 240 minutes)');
+    db.prepare('UPDATE tasks SET duration = ? WHERE id = ?').run(Math.round(d / 15) * 15, t.id);
+  }
   if ('done' in req.body) db.prepare('UPDATE tasks SET done_at = ? WHERE id = ?').run(req.body.done ? new Date().toISOString() : null, t.id);
   if (req.body.title) db.prepare('UPDATE tasks SET title = ? WHERE id = ?').run(str(req.body.title, 140), t.id);
   if (isDate(req.body.date)) db.prepare('UPDATE tasks SET date = ? WHERE id = ?').run(req.body.date, t.id);

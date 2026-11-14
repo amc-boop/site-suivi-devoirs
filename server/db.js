@@ -106,6 +106,11 @@ CREATE TABLE IF NOT EXISTS quizzes (
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 `);
 
+// Migrations légères pour les bases déjà créées
+const taskCols = db.prepare('PRAGMA table_info(tasks)').all().map((c) => c.name);
+if (!taskCols.includes('time')) db.exec('ALTER TABLE tasks ADD COLUMN time TEXT');
+if (!taskCols.includes('duration')) db.exec('ALTER TABLE tasks ADD COLUMN duration INTEGER NOT NULL DEFAULT 30');
+
 export const getSetting = (key, def) => {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
   return row ? JSON.parse(row.value) : def;

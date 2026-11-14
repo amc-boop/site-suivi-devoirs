@@ -127,6 +127,7 @@ export function TaskItem({ task, onChange, readOnly, showDate, allowPhoto, allow
           {task.subject_short && <span className="tag">{task.subject_short}</span>}
           <span>{KIND_LABEL[task.kind] || 'Tâche'}</span>
           {showDate && <span>{shortDate(task.original_date)}</span>}
+          {task.time && <span className="mono">{task.time}</span>}
           {task.source === 'parent' && <span className="tag"><UsersRound size={12} /> parents</span>}
           {task.carried > 0 && !late && <span className="tag">reportée {task.carried}×</span>}
           {late && <span className="tag solid red"><TriangleAlert size={12} /> en retard</span>}

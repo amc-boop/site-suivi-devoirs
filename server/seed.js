@@ -97,6 +97,9 @@ export async function seed({ demo }) {
   rw('Bac blanc de français préparé', 'Resto en famille', 'manuel', {}, addDays(T, -5));
 
   generateDay(T);
+  // Quelques tâches déjà placées dans l'agenda pour la démo (les autres restent « à placer »)
+  const todays = db.prepare('SELECT id FROM tasks WHERE date = ? ORDER BY id').all(T);
+  ['17:30', '18:30'].forEach((h, i) => todays[i] && db.prepare('UPDATE tasks SET time = ? WHERE id = ?').run(h, todays[i].id));
   console.log(`Base prête avec données d'exemple : ${DB_PATH}`);
 }
 

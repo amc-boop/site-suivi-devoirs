@@ -48,7 +48,7 @@ Sans clé, l'onglet Quiz affiche « Quiz pas encore activé » et rien ne casse.
   - « Finir : … » 2 jours avant un devoir à rendre (toujours ajouté) ;
   - le week-end : un texte du bac de français et un ancien DS à refaire (rotation entre spécialités).
   - Les tâches non faites sont reportées au lendemain 2 fois maximum, puis restent « en retard ».
-- **Agenda** : vue semaine avec cours, DS, bacs blancs, devoirs et tâches.
+- **Agenda** visuel : grille horaire (7 h – 23 h) avec les cours en fond, les DS/devoirs en haut de chaque jour et une zone « À placer ». On glisse une tâche (doigt ou souris) sur l'heure voulue, on la déplace de la même façon, ou on la remet dans « À placer ». Un jour à la fois sur téléphone, la semaine entière sur ordinateur. Toucher une tâche : cocher, durée, retirer l'heure.
 - **Rendu** du week-end : liste de la semaine, cocher ou joindre une photo par tâche, mot pour les parents, « Valider ma semaine ».
 - **Bilan** (parents) : % de la semaine, historique en graphique, photos, retards, bouton « Vu » + commentaire. Les parents peuvent aussi ajouter des tâches (marquées « parents », lui seul les coche), des DS et devoirs dans l'agenda, et modifier l'emploi du temps.
 - **Récompenses** par paliers : X semaines de suite à Y %, +N points de moyenne dans une matière, ou objectif libre.

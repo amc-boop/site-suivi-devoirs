@@ -27,8 +27,8 @@ export const priority = (kind) => PRIORITY[kind] ?? 6;
 const subjectsById = () => Object.fromEntries(db.prepare('SELECT * FROM subjects').all().map((s) => [s.id, s]));
 
 const insertTask = db.prepare(`INSERT OR IGNORE INTO tasks
-  (date, original_date, title, subject_id, kind, source, event_id, auto_key)
-  VALUES (?, ?, ?, ?, ?, 'auto', ?, ?)`);
+  (date, original_date, title, subject_id, kind, source, event_id, auto_key, duration)
+  VALUES (?1, ?2, ?3, ?4, ?5, 'auto', ?6, ?7, CASE WHEN ?5 IN ('ds','refaire_ds','devoir') THEN 60 ELSE 30 END)`);
 
 function countOn(date) {
   return db.prepare('SELECT COUNT(*) AS n FROM tasks WHERE date = ?').get(date).n;
