@@ -94,3 +94,49 @@ Si la photo est illisible ou n'est pas un cours, renvoie une liste vide.`;
   if (!questions.length && !allowEmptyImages) throw Object.assign(new Error("Gemini n'a pas trouvé de cours lisible sur la photo."), { status: 422 });
   return { titre: parsed.titre || chapter, questions };
 }
+
+// Lecture d'une photo d'emploi du temps : renvoie les créneaux trouvés (rien n'est enregistré ici)
+export async function timetableFromImages(images) {
+  if (!geminiEnabled()) throw Object.assign(new Error('Lecture désactivée : aucune clé GEMINI_API_KEY.'), { status: 503 });
+  const prompt = `Voici la photo de l'emploi du temps d'un élève de première générale en France (souvent une capture de Pronote ou un tableau papier).
+Liste TOUS les cours de la semaine type, un objet par cours :
+- jour : 1 = lundi, 2 = mardi, 3 = mercredi, 4 = jeudi, 5 = vendredi, 6 = samedi ;
+- debut et fin au format HH:MM (24 h) ;
+- matiere : le nom de la matière tel qu'écrit (ex. « MATHEMATIQUES », « SES », « PHYSIQUE-CHIMIE », « HIST.-GEO. », « ANGLAIS LV1 ») ;
+- salle si elle est indiquée, sinon vide.
+Ignore les récréations, la cantine, les heures vides, les permanences et les cours annulés.
+Si un cours n'a lieu qu'une semaine sur deux (semaine A / B, Q1 / Q2), garde-le et mets « A » ou « B » dans le champ semaine.
+Si la photo n'est pas un emploi du temps, renvoie une liste vide.`;
+  const body = {
+    contents: [{ role: 'user', parts: [...images.map((img) => ({ inline_data: { mime_type: img.mime, data: img.buffer.toString('base64') } })), { text: prompt }] }],
+    generationConfig: {
+      temperature: 0.1,
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: 'OBJECT',
+        properties: {
+          cours: {
+            type: 'ARRAY',
+            items: {
+              type: 'OBJECT',
+              properties: {
+                jour: { type: 'INTEGER' }, debut: { type: 'STRING' }, fin: { type: 'STRING' },
+                matiere: { type: 'STRING' }, salle: { type: 'STRING' }, semaine: { type: 'STRING' },
+              },
+              required: ['jour', 'debut', 'fin', 'matiere'],
+            },
+          },
+        },
+        required: ['cours'],
+      },
+    },
+  };
+  const data = await callGemini(body);
+  const text = data?.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') || '{}';
+  let parsed;
+  try { parsed = JSON.parse(text); } catch { throw Object.assign(new Error('Réponse de Gemini illisible, réessaie.'), { status: 502 }); }
+  const hhmm = (s) => { const m = String(s || '').trim().replace('h', ':').match(/^(\d{1,2}):?(\d{2})?$/); return m ? `${m[1].padStart(2, '0')}:${m[2] || '00'}` : null; };
+  return (parsed.cours || [])
+    .map((c) => ({ weekday: Number(c.jour), start: hhmm(c.debut), end: hhmm(c.fin), label: String(c.matiere || '').trim(), room: String(c.salle || '').trim().slice(0, 20), week: String(c.semaine || '').trim().toUpperCase().slice(0, 1) }))
+    .filter((c) => c.weekday >= 1 && c.weekday <= 6 && c.start && c.end && c.end > c.start && c.label);
+}

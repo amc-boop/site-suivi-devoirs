@@ -38,7 +38,8 @@ export async function seed({ demo, accounts = DEFAULT_ACCOUNTS }) {
     for (const a of accounts) await run('INSERT INTO users(username, display_name, role, password_hash) VALUES (?,?,?,?)', a.username, a.display_name, a.role, hashPassword(a.password));
     for (const [i, [name, short, spe, rev]] of SUBJECTS.entries()) await run('INSERT INTO subjects(name, short, is_spe, review_daily, position) VALUES (?,?,?,?,?)', name, short, spe, rev, i);
     const sid = Object.fromEntries((await all('SELECT id, short FROM subjects')).map((s) => [s.short, s.id]));
-    for (const [wd, st, e, subj, room] of TIMETABLE) await run('INSERT INTO timetable(weekday, start, "end", subject_id, room) VALUES (?,?,?,?,?)', wd, st, e, sid[subj], room);
+    // Emploi du temps d'exemple seulement pour la démo locale ; en vrai, on l'importe en photo depuis l'Agenda
+    if (demo) for (const [wd, st, e, subj, room] of TIMETABLE) await run('INSERT INTO timetable(weekday, start, "end", subject_id, room) VALUES (?,?,?,?,?)', wd, st, e, sid[subj], room);
   });
   if (!demo) return console.log(`Base prête (sans données d'exemple) en ${Date.now() - T0} ms.`);
 

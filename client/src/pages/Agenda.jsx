@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Trash2, Check, Undo2, CalendarX2, GripVertical, TriangleAlert } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Trash2, Check, Undo2, CalendarX2, GripVertical, TriangleAlert, Camera, ChevronRight as Chev } from 'lucide-react';
+import TimetableImport from '../TimetableImport.jsx';
 import { api, addDays, weekStart, todayStr, weekLabel, dayLabel, parse, DAYS_SHORT, EVENT_LABEL, KIND_LABEL } from '../lib.js';
 import { useApp, AddSheet, Skeleton, Sheet, useAutoRefresh } from '../ui.jsx';
 
@@ -40,6 +41,7 @@ export default function Agenda() {
   const [sel, setSel] = useState(todayStr());
   const [data, setData] = useState(null);
   const [adding, setAdding] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [open, setOpen] = useState(null); // tâche touchée (sans glisser)
   const [drag, setDrag] = useState(null); // { task, x, y, target }
   const scrollRef = useRef(null), colsRef = useRef(null), trayRef = useRef(null), dragRef = useRef(null), lastY = useRef(0);
@@ -167,6 +169,7 @@ export default function Agenda() {
         <button className="icon-btn" onClick={() => move(-1)} aria-label="Semaine précédente"><ChevronLeft /></button>
         <div className="grow center"><div className="h2">Agenda</div><div className="small muted">Semaine {weekLabel(ws)}</div></div>
         <button className="icon-btn" onClick={() => move(1)} aria-label="Semaine suivante"><ChevronRight /></button>
+        <button className="icon-btn" onClick={() => setImporting(true)} aria-label="Importer l'emploi du temps en photo" title="Emploi du temps en photo"><Camera size={20} /></button>
         <button className="icon-btn" style={{ background: 'var(--ink)', color: 'var(--paper)' }} onClick={() => setAdding(true)} aria-label="Ajouter une tâche ou un DS"><Plus size={24} strokeWidth={3} /></button>
       </div>
 
@@ -187,6 +190,13 @@ export default function Agenda() {
             </div>
           )}
 
+          {data.days.every((d) => d.classes.length === 0) && (
+            <button className="panel tone row" style={{ width: '100%', textAlign: 'left', cursor: 'pointer', marginBottom: 10 }} onClick={() => setImporting(true)}>
+              <Camera size={22} />
+              <span className="grow"><b>Ajoute ton emploi du temps</b><span className="small muted" style={{ display: 'block' }}>Prends-le en photo (ou une capture de Pronote) : il se remplit tout seul.</span></span>
+              <Chev size={20} />
+            </button>
+          )}
           <div className={`cal-layout ${wide ? 'wide' : ''}`}>
             {/* Tâches à placer */}
             <div ref={trayRef} className={`tray ${drag?.target?.tray ? 'over' : ''}`} aria-label="Tâches à placer">
@@ -297,6 +307,7 @@ export default function Agenda() {
         </Sheet>
       )}
 
+      {importing && <TimetableImport hasExisting={data?.days.some((d) => d.classes.length > 0)} onClose={() => setImporting(false)} onSaved={load} />}
       {adding && <AddSheet defaultDate={sel < todayStr() ? todayStr() : sel} onClose={() => setAdding(false)} onDone={load} />}
     </div>
   );
