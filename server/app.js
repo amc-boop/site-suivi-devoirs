@@ -3,10 +3,10 @@ import express from 'express';
 import cookieParser from 'cookie-parser';
 import multer from 'multer';
 import crypto from 'node:crypto';
-import { all, one, run, insert, ensureSchema, setSetting } from './db.js';
+import { all, one, run, insert, tx, ensureSchema, setSetting } from './db.js';
 import { ensureUpTo, today, addDays, weekStart, weekday, weekStats, isDate, priority, diffDays, limits } from './planner.js';
 import { rewardProgress } from './rewards.js';
-import { geminiEnabled, quizFromImages } from './gemini.js';
+import { geminiEnabled, quizFromImages, timetableFromImages } from './gemini.js';
 import { publicQuiz, generateWeeklyQuiz, answerQuestion, finishAttempt, weeklyQuizPassed, weeklyQuizSummary, weeklyQuizPossible } from './weeklyQuiz.js';
 import { hashPassword, verifyPassword } from './auth.js';
 import { savePhoto, readPhoto, deletePhoto } from './storage.js';
@@ -18,11 +18,25 @@ app.disable('x-powered-by');
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 
+// Diagnostic de la mise en ligne (aucune valeur secrète n'est renvoyée) : /api/health
+app.get('/api/health', async (req, res) => {
+  const env = Object.fromEntries(['DATABASE_URL', 'SUPABASE_URL', 'SUPABASE_SECRET_KEY', 'GEMINI_API_KEY'].map((k) => [k, Boolean(process.env[k])]));
+  let db = 'ok';
+  try { await ensureSchema(); await one('SELECT 1 AS ok'); } catch (e) { db = `${e.code || e.name}: ${String(e.message).replace(/postgres(ql)?:\/\/\S+/g, '<url>').slice(0, 160)}`; }
+  res.status(db === 'ok' ? 200 : 500).json({ env, db, vercel: Boolean(process.env.VERCEL) });
+});
+
 // Tables créées au premier appel ; en local, base de démo si elle est vide
 let booted;
 app.use((req, res, next) => {
+  // En ligne sans DATABASE_URL, la base locale ne peut pas fonctionner : message clair plutôt qu'une erreur obscure
+  if (process.env.VERCEL && !process.env.DATABASE_URL) return next(Object.assign(new Error('Configuration incomplète : DATABASE_URL manque dans les variables d’environnement Vercel.'), { status: 503 }));
   booted ||= ensureSchema().then(seedIfEmpty);
-  booted.then(() => next(), (e) => { booted = null; next(e); });
+  booted.then(() => next(), (e) => {
+    booted = null;
+    console.error('Démarrage de la base impossible :', e.code, e.message);
+    next(Object.assign(new Error('Base de données injoignable. Vérifie DATABASE_URL (mot de passe, port 6543).'), { status: 503 }));
+  });
 });
 
 // ---------- Utilitaires ----------
@@ -123,14 +137,89 @@ const validSlot = async (s) => {
   if (!(await one('SELECT 1 FROM subjects WHERE id = ?', Number(s.subject_id)))) throw fail(400, 'Matière inconnue');
   return [wd, s.start, s.end, Number(s.subject_id), str(s.room, 20)];
 };
-app.post('/api/timetable', PARENT, wrap(async (req, res) => {
+app.post('/api/timetable', ALL, wrap(async (req, res) => {
   res.json({ id: await insert('INSERT INTO timetable(weekday, start, "end", subject_id, room) VALUES (?,?,?,?,?)', ...(await validSlot(req.body))) });
 }));
-app.patch('/api/timetable/:id', PARENT, wrap(async (req, res) => {
+app.patch('/api/timetable/:id', ALL, wrap(async (req, res) => {
   await run('UPDATE timetable SET weekday=?, start=?, "end"=?, subject_id=?, room=? WHERE id=?', ...(await validSlot(req.body)), int(req.params.id));
   res.json({ ok: true });
 }));
-app.delete('/api/timetable/:id', PARENT, wrap(async (req, res) => { await run('DELETE FROM timetable WHERE id = ?', int(req.params.id)); res.json({ ok: true }); }));
+app.delete('/api/timetable/:id', ALL, wrap(async (req, res) => { await run('DELETE FROM timetable WHERE id = ?', int(req.params.id)); res.json({ ok: true }); }));
+
+// ---------- Emploi du temps en photo (Gemini) ----------
+const norm = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+// Correspondance nom écrit sur l'emploi du temps -> matière du site (ordre important : EPS avant physique)
+const SUBJECT_RULES = [
+  ['EPS', /\beps\b|sport|education physique/], ['ES', /enseign\w* scient|ens sci/], ['EMC', /\be ?m ?c\b|moral|civique/],
+  ['MATH', /math/], ['SES', /\bses\b|econom|sociales/], ['PC', /physique|chimie|\bpc\b|\bp c\b/],
+  ['FR', /francais|\bfr\b|lettres/], ['HG', /hist|geo/], ['ANG', /angl|english|\blv ?1\b|\blva\b/], ['ESP', /espagn|\blv ?2\b|\blvb\b/],
+];
+function matchSubject(label, subjects) {
+  const n = norm(label);
+  const exact = subjects.find((s) => norm(s.name) === n || norm(s.short) === n);
+  if (exact) return exact;
+  for (const [short, re] of SUBJECT_RULES) if (re.test(n)) { const s = subjects.find((x) => x.short === short); if (s) return s; }
+  return null;
+}
+const titleCase = (s) => String(s).toLowerCase().replace(/(^|[\s-])\p{L}/gu, (m) => m.toUpperCase()).slice(0, 40);
+
+// 1. Lecture de la photo : renvoie une proposition, rien n'est enregistré
+app.post('/api/timetable/import', ALL, memUpload.array('photos', 3), wrap(async (req, res) => {
+  const files = (req.files || []).filter((f) => /^image\//.test(f.mimetype));
+  if (!files.length) throw fail(400, "Prends une photo de l'emploi du temps.");
+  const subjects = await all('SELECT * FROM subjects ORDER BY position, id');
+  const found = await timetableFromImages(files.map((f) => ({ mime: f.mimetype, buffer: f.buffer })));
+  if (!found.length) throw fail(422, "Aucun cours trouvé sur la photo. Essaie avec une photo plus nette, bien droite, avec les jours et les heures visibles.");
+  const matched = found.map((c) => {
+    const s = matchSubject(c.label, subjects);
+    return { ...c, subject_id: s?.id ?? null, new_subject: s ? '' : titleCase(c.label) };
+  }).sort((a, b) => a.weekday - b.weekday || a.start.localeCompare(b.start));
+  // Deux heures qui se suivent dans la même matière et la même salle = un seul cours (8h-9h + 9h-10h -> 8h-10h)
+  const slots = [];
+  for (const c of matched) {
+    const prev = slots[slots.length - 1];
+    if (prev && prev.weekday === c.weekday && prev.end === c.start && prev.label === c.label && prev.room === c.room && prev.week === c.week) prev.end = c.end;
+    else slots.push({ ...c });
+  }
+  res.json({ slots, subjects });
+}));
+
+// 2. Enregistrement de la proposition vérifiée : remplace tout l'emploi du temps
+app.post('/api/timetable/replace', ALL, wrap(async (req, res) => {
+  const slots = Array.isArray(req.body.slots) ? req.body.slots.slice(0, 80) : [];
+  if (!slots.length) throw fail(400, 'Aucun cours à enregistrer.');
+  const result = await tx(async () => {
+    const created = {};
+    const rows = [];
+    for (const sl of slots) {
+      let sid = sl.subject_id ? Number(sl.subject_id) : null;
+      if (!sid) {
+        const name = str(sl.new_subject, 40); if (!name) throw fail(400, 'Chaque cours doit avoir une matière.');
+        if (!created[name]) {
+          const pos = (await one('SELECT COALESCE(MAX(position),0)+1 AS p FROM subjects')).p;
+          created[name] = await insert('INSERT INTO subjects(name, short, is_spe, review_daily, position) VALUES (?,?,0,1,?)', name, norm(name).replace(/ /g, '').slice(0, 4).toUpperCase() || 'MAT', pos);
+        }
+        sid = created[name];
+      }
+      rows.push(await validSlot({ ...sl, subject_id: sid }));
+    }
+    await run('DELETE FROM timetable');
+    for (const r of rows) await run('INSERT INTO timetable(weekday, start, "end", subject_id, room) VALUES (?,?,?,?,?)', ...r);
+    // Les tâches « revoir le cours » d'aujourd'hui sont recalculées avec le nouvel emploi du temps
+    const T = today();
+    await run("DELETE FROM tasks WHERE date = ? AND source = 'auto' AND kind = 'revision_cours' AND done_at IS NULL AND photo IS NULL", T);
+    const { maxPerDay } = await limits();
+    const todays = await all(`SELECT DISTINCT s.* FROM timetable tt JOIN subjects s ON s.id = tt.subject_id WHERE tt.weekday = ? AND s.review_daily = 1`, weekday(T));
+    todays.sort((x, y) => y.is_spe - x.is_spe || x.position - y.position);
+    for (const sub of todays) {
+      if ((await one('SELECT COUNT(*)::int AS n FROM tasks WHERE date = ?', T)).n >= maxPerDay) break;
+      await run(`INSERT INTO tasks(date, original_date, title, subject_id, kind, source, auto_key) VALUES (?,?,?,?, 'revision_cours', 'auto', ?) ON CONFLICT DO NOTHING`,
+        T, T, `Revoir le cours de ${sub.name} d'aujourd'hui`, sub.id, `rev-${sub.id}-${T}`);
+    }
+    return { count: rows.length, newSubjects: Object.keys(created) };
+  });
+  res.json(result);
+}));
 
 // ---------- Réglages ----------
 app.get('/api/settings', ALL, wrap(async (req, res) => res.json(await limits())));
