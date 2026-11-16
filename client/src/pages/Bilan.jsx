@@ -4,6 +4,7 @@ import { api, weekLabel, shortDate, EVENT_LABEL } from '../lib.js';
 import { useApp, Skeleton, Sheet, Pct, Bar, Lightbox, Empty, Flag, AddSheet, useAutoRefresh } from '../ui.jsx';
 import { WeekTasks, WeekStatus, DaysChecklist } from './Rendu.jsx';
 import { NotificationsBanner } from '../Notifications.jsx';
+import { ProgressCard, useProgress } from './Progression.jsx';
 
 function WeeksChart({ weeks }) {
   const list = [...weeks].reverse().filter((w) => w.total > 0);
@@ -98,6 +99,7 @@ function WeekDetail({ ws, onClose, onSeen }) {
 
 export default function Bilan() {
   const { toast, user, refreshAlerts } = useApp();
+  const progress = useProgress();
   const [data, setData] = useState(null);
   const [open, setOpen] = useState(null);
   const [adding, setAdding] = useState(false);
@@ -119,6 +121,7 @@ export default function Bilan() {
     <div className="page">
       <div className="row"><h1 className="h1 grow">Bilan</h1><button className="btn sm" onClick={() => setAdding(true)}><Plus size={18} /> Tâche</button></div>
 
+      <ProgressCard p={progress} />
       <NotificationsBanner />
 
       {alerts.length > 0 && (

@@ -418,3 +418,25 @@ textarea.input { min-height: 90px; resize: vertical; }
 .focus-done { min-height: 64px; font-size: 1.25rem; }
 .focus-quit { position: relative; overflow: hidden; border: 2px solid var(--paper); border-radius: var(--radius); background: transparent; color: var(--paper); font: inherit; font-size: .9rem; font-weight: 700; padding: 10px; display: flex; gap: 6px; align-items: center; justify-content: center; cursor: pointer; touch-action: none; -webkit-touch-callout: none; isolation: isolate; }
 .focus-quit-fill { position: absolute; inset: 0; background: rgba(22,22,22,.55); transform-origin: left; z-index: -1; }
+
+/* ---------- Série, niveau, badges ---------- */
+.prog-card { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: var(--line); border-radius: var(--radius); background: var(--paper); box-shadow: var(--pop); color: var(--ink); text-decoration: none; }
+.prog-streak { display: flex; align-items: center; gap: 4px; padding: 6px 10px 6px 6px; border: 2.5px solid var(--ink); border-radius: var(--radius); background: var(--tone-2); color: var(--muted); flex: none; transform: rotate(-3deg); }
+.prog-streak.on { background: var(--ink); color: var(--paper); }
+.prog-streak-n { font-family: var(--display); font-size: 1.9rem; line-height: .9; }
+.prog-streak-l { font-size: .62rem; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; }
+.prog-lvl { font-family: var(--display); font-size: 1rem; letter-spacing: .04em; background: var(--ink); color: var(--paper); padding: 1px 8px 0; border-radius: 4px; transform: skewX(-8deg); flex: none; }
+.prog-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.badges { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.badge { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; padding: 12px 10px; border: 2px dashed #9a9a9a; border-radius: var(--radius); color: var(--muted); background: var(--paper); }
+.badge b { color: var(--ink); line-height: 1.2; }
+.badge.on { border: 2.5px solid var(--ink); background: var(--green); color: var(--on-green); box-shadow: var(--pop); }
+.badge.on .small { color: var(--on-green); }
+.levelup { position: fixed; inset: 0; z-index: 650; display: grid; place-items: center; background: rgba(22,22,22,.55); animation: fade .2s ease-out; }
+.levelup-burst {
+  background: var(--green); color: var(--on-green); border: 3px solid var(--ink); padding: 34px 40px; text-align: center; box-shadow: 6px 6px 0 var(--ink);
+  clip-path: polygon(50% 0, 61% 14%, 79% 6%, 80% 24%, 100% 25%, 88% 41%, 100% 55%, 83% 62%, 90% 82%, 70% 78%, 62% 100%, 50% 85%, 38% 100%, 30% 78%, 10% 82%, 17% 62%, 0 55%, 12% 41%, 0 25%, 20% 24%, 21% 6%, 39% 14%);
+  animation: up .3s ease-out;
+}
+.levelup-sfx { font-family: var(--display); font-size: 2.8rem; line-height: 1; transform: rotate(-4deg); }
+.levelup-title { font-weight: 900; margin-top: 4px; }
