@@ -57,6 +57,13 @@ Sans clé, l'onglet Quiz affiche « Quiz pas encore activé » et rien ne casse.
 - **Notes** : toutes les matières (pas seulement les spés), courbe et moyenne par matière, et un onglet **Moyenne générale** (moyenne des moyennes de chaque matière) avec son évolution après chaque note.
 - **Réglages** (admin) : éditeur d'emploi du temps, comptes, matières (spé / révision du soir), limites des tâches.
 
+## Notifications
+
+- **Martin** : rappel chaque jour à 18 h (tâches du soir et J-x avant le prochain DS ; le dimanche, rendu du week-end).
+- **Parents** : notification immédiate quand un rendu est envoyé incomplet, et à 18 h si le rendu de la veille a été oublié.
+- Activation : bouton « Activer les notifications » (accueil, bilan ou Mon compte). Sur iPhone, il faut d'abord ajouter le site à l'écran d'accueil (iOS 16.4 ou plus).
+- Technique : Web Push (`web-push`, clés `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY`) et tâche planifiée Vercel (`vercel.json` → `crons`, protégée par `CRON_SECRET`). Elle est déclenchée à 16 h et 17 h UTC pour couvrir l'heure d'été et d'hiver ; le serveur n'envoie qu'une fois, à partir de 18 h à Paris. Sur l'offre gratuite de Vercel, l'heure exacte varie entre 18 h 00 et 18 h 59.
+
 ## Mise en ligne (Supabase + Vercel, gratuit)
 
 1. **Supabase** (https://supabase.com) : nouveau projet, région Paris. Remplir dans `.env` : `DATABASE_URL` (bouton Connect → Transaction pooler, port 6543), `SUPABASE_URL` et `SUPABASE_SECRET_KEY` (voir `.env.example`).

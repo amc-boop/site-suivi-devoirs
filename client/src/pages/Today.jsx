@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Plus, TriangleAlert, ChevronRight, CircleCheck, ListTodo, FileText, TrendingUp } from 'lucide-react';
 import { api, dayLabel, relDays, shortDate } from '../lib.js';
 import { useApp, TaskItem, AddSheet, Skeleton, Empty, Bar, useAutoRefresh } from '../ui.jsx';
+import { NotificationsBanner } from '../Notifications.jsx';
 
 // Tuile de compte à rebours (J-x) ; rouge à J-3 ou moins
 function CountdownKpi({ label, ev, empty, wide }) {
@@ -77,6 +78,8 @@ export default function Today() {
         <Kpi label="Semaine" icon={TrendingUp} value={`${data.week.pct ?? 0}%`} sub={`${data.week.done}/${data.week.total} tâches faites`}
           tone={data.week.pct >= 80 ? 'ok' : ''} />
       </div>
+
+      <NotificationsBanner />
 
       <div className="section row" style={{ alignItems: 'flex-end' }}>
         <div className="grow">

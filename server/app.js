@@ -11,6 +11,7 @@ import { publicQuiz, generateWeeklyQuiz, answerQuestion, finishAttempt, weeklyQu
 import { hashPassword, verifyPassword } from './auth.js';
 import { savePhoto, readPhoto, deletePhoto } from './storage.js';
 import { seedIfEmpty } from './seed.js';
+import { pushEnabled, publicKey, saveSubscription, removeSubscription, countSubscriptions, notifyUser, notifyParents, eveningRun } from './push.js';
 
 export const app = express();
 app.set('trust proxy', 1);
@@ -394,7 +395,11 @@ async function checkTasks(dates) {
 // Une alerte par sujet : on remplace l'alerte non vue précédente
 async function setAlert(kind, date, message, details) {
   await run('DELETE FROM alerts WHERE kind = ? AND date = ? AND seen_at IS NULL', kind, date);
-  if (message) await run('INSERT INTO alerts(kind, date, message, details) VALUES (?,?,?,?)', kind, date, message, details || '');
+  if (message) {
+    await run('INSERT INTO alerts(kind, date, message, details) VALUES (?,?,?,?)', kind, date, message, details || '');
+    // Notification immédiate sur le téléphone des parents
+    await notifyParents({ title: 'Alerte rendu', body: message, url: '/#/bilan', tag: `${kind}-${date}` }).catch(() => {});
+  }
 }
 const missingText = (m) => m.map((t) => `• ${t.title}`).join('\n');
 
@@ -454,6 +459,26 @@ app.post('/api/report/submit', STUDENT, wrap(async (req, res) => {
     ? `Rendu du week-end incomplet : ${c.missing.length} tâche${c.missing.length > 1 ? 's' : ''} sur ${c.total} pas faite${c.missing.length > 1 ? 's' : ''}`
     : null, missingText(c.missing));
   res.json(await weekReport(ws));
+}));
+
+// ---------- Notifications sur le téléphone ----------
+app.get('/api/push/status', ALL, wrap(async (req, res) => res.json({ enabled: pushEnabled(), publicKey: publicKey(), devices: await countSubscriptions(req.user.id) })));
+app.post('/api/push/subscribe', ALL, wrap(async (req, res) => {
+  if (!pushEnabled()) throw fail(503, 'Notifications pas encore configurées (clés VAPID manquantes).');
+  await saveSubscription(req.user.id, req.body.subscription);
+  res.json({ ok: true, devices: await countSubscriptions(req.user.id) });
+}));
+app.post('/api/push/unsubscribe', ALL, wrap(async (req, res) => { await removeSubscription(req.body.endpoint); res.json({ ok: true }); }));
+app.post('/api/push/test', ALL, wrap(async (req, res) => {
+  const n = await notifyUser(req.user.id, { title: 'Notifications activées', body: req.user.role === 'eleve' ? 'Tu recevras un rappel chaque jour à 18 h.' : 'Tu seras prévenu(e) quand un rendu est incomplet ou oublié.', url: '/#/' });
+  if (!n) throw fail(400, 'Aucun appareil abonné : active d’abord les notifications.');
+  res.json({ sent: n });
+}));
+// Tâche planifiée Vercel (vercel.json → crons) : rappel de 18 h, protégé par CRON_SECRET
+app.get('/api/cron/evening', wrap(async (req, res) => {
+  const secret = process.env.CRON_SECRET;
+  if (!secret || req.get('authorization') !== `Bearer ${secret}`) throw fail(401, 'Non autorisé');
+  res.json(await eveningRun({ force: req.query.force === '1' }));
 }));
 
 // ---------- Alertes pour les parents ----------

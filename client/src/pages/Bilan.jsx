@@ -3,6 +3,7 @@ import { Eye, Camera, TriangleAlert, ChevronRight, Plus, CircleCheck, Undo2 } fr
 import { api, weekLabel, shortDate, EVENT_LABEL } from '../lib.js';
 import { useApp, Skeleton, Sheet, Pct, Bar, Lightbox, Empty, Flag, AddSheet, useAutoRefresh } from '../ui.jsx';
 import { WeekTasks, WeekStatus, DaysChecklist } from './Rendu.jsx';
+import { NotificationsBanner } from '../Notifications.jsx';
 
 function WeeksChart({ weeks }) {
   const list = [...weeks].reverse().filter((w) => w.total > 0);
@@ -117,6 +118,8 @@ export default function Bilan() {
   return (
     <div className="page">
       <div className="row"><h1 className="h1 grow">Bilan</h1><button className="btn sm" onClick={() => setAdding(true)}><Plus size={18} /> Tâche</button></div>
+
+      <NotificationsBanner />
 
       {alerts.length > 0 && (
         <div className="section stack" aria-label="Alertes">

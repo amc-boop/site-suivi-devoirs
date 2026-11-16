@@ -152,6 +152,15 @@ CREATE TABLE IF NOT EXISTS weekly_quizzes (
   last_score INTEGER,
   passed_at TEXT
 );
+-- Téléphones abonnés aux notifications
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  endpoint TEXT UNIQUE NOT NULL,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT ${NOW}
+);
 -- Alertes pour les parents (rendu incomplet…)
 CREATE TABLE IF NOT EXISTS alerts (
   id SERIAL PRIMARY KEY,
@@ -192,7 +201,7 @@ CREATE TABLE IF NOT EXISTS quizzes (
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 `;
 
-export const TABLES = ['alerts', 'weekly_quizzes', 'quizzes', 'rewards', 'grades', 'daily_reports', 'weekly_reports', 'generated_days', 'tasks', 'events', 'timetable', 'subjects', 'sessions', 'users', 'settings'];
+export const TABLES = ['push_subscriptions', 'alerts', 'weekly_quizzes', 'quizzes', 'rewards', 'grades', 'daily_reports', 'weekly_reports', 'generated_days', 'tasks', 'events', 'timetable', 'subjects', 'sessions', 'users', 'settings'];
 
 let ready;
 // À appeler avant la première requête (création des tables si besoin, une fois par démarrage)
