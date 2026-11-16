@@ -187,7 +187,16 @@ export const TABLES = ['weekly_quizzes', 'quizzes', 'rewards', 'grades', 'daily_
 let ready;
 // À appeler avant la première requête (création des tables si besoin, une fois par démarrage)
 export function ensureSchema() {
-  if (!ready) ready = (async () => { const d = await driver(); for (const stmt of SCHEMA.split(';').map((s) => s.trim()).filter(Boolean)) await d.query(stmt); })();
+  if (!ready) {
+    ready = (async () => {
+      const d = await driver();
+      for (const stmt of SCHEMA.split(';').map((s) => s.trim()).filter(Boolean)) await d.query(stmt);
+      // Sécurité Supabase : sans politique, l'API publique de Supabase (clé « publishable ») ne peut lire
+      // aucune table. Seul notre serveur, connecté directement à Postgres, y a accès.
+      for (const t of TABLES) await d.query(`ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`);
+    })();
+    ready.catch(() => { ready = null; });
+  }
   return ready;
 }
 
