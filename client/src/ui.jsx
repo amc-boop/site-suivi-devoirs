@@ -173,15 +173,44 @@ export function TaskItem({ task, onChange, readOnly, showDate, allowPhoto, allow
 }
 
 // ---------- Choix de matière / de date ----------
-export function SubjectChips({ value, onChange, onlySpe, allowNone }) {
-  const { subjects } = useApp();
-  const list = subjects.filter((s) => !onlySpe || s.is_spe || s.short === 'FR');
+// Toutes les matières, spécialités d'abord, + « Autre matière » pour en ajouter une à la main
+export function SubjectChips({ value, onChange, allowNone }) {
+  const { subjects, reloadSubjects, toast } = useApp();
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const list = [...subjects].sort((a, b) => b.is_spe - a.is_spe || a.position - b.position);
+  async function add() {
+    const n = name.trim();
+    if (!n) return;
+    const existing = subjects.find((s) => s.name.toLowerCase() === n.toLowerCase());
+    if (existing) { onChange(existing.id); setAdding(false); setName(''); return; }
+    setBusy(true);
+    try {
+      const { id } = await api('/subjects', { method: 'POST', body: { name: n } });
+      await reloadSubjects();
+      onChange(id); setAdding(false); setName('');
+      toast(`Matière « ${n} » ajoutée`);
+    } catch (e) { toast(e.message, 'red'); }
+    setBusy(false);
+  }
   return (
-    <div className="chips">
-      {allowNone && <button type="button" className={`chip ${!value ? 'on' : ''}`} onClick={() => onChange(null)}>Aucune</button>}
-      {list.map((s) => (
-        <button type="button" key={s.id} className={`chip ${value === s.id ? 'on' : ''}`} onClick={() => onChange(s.id)}>{s.name}</button>
-      ))}
+    <div className="stack">
+      <div className="chips">
+        {allowNone && <button type="button" className={`chip ${!value ? 'on' : ''}`} onClick={() => onChange(null)}>Aucune</button>}
+        {list.map((s) => (
+          <button type="button" key={s.id} className={`chip ${value === s.id ? 'on' : ''}`} onClick={() => onChange(s.id)}>{s.name}</button>
+        ))}
+        {!adding && <button type="button" className="chip" style={{ borderStyle: 'dashed' }} onClick={() => setAdding(true)}><Plus size={14} style={{ verticalAlign: -2 }} /> Autre matière</button>}
+      </div>
+      {adding && (
+        <div className="row">
+          <input className="input grow" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex. Philosophie, SVT, NSI, LLCER…" maxLength={40}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} aria-label="Nom de la matière" />
+          <button type="button" className="btn" onClick={add} disabled={busy || !name.trim()}>Ajouter</button>
+          <button type="button" className="icon-btn plain" onClick={() => { setAdding(false); setName(''); }} aria-label="Annuler"><X size={18} /></button>
+        </div>
+      )}
     </div>
   );
 }
@@ -295,7 +324,7 @@ export function AddSheet({ onClose, onDone, defaultDate }) {
           </div>
         )}
         {!['bac_francais', 'autre'].includes(tpl) && (
-          <div><label className="f">Matière</label><SubjectChips value={subject} onChange={setSubject} onlySpe={tpl !== 'event'} /></div>
+          <div><label className="f">Matière</label><SubjectChips value={subject} onChange={setSubject} /></div>
         )}
         <div>
           <label className="f" htmlFor="add-text">{tpl === 'bac_francais' ? 'Numéro du texte' : tpl === 'autre' ? 'Tâche' : 'Précision'}</label>

@@ -114,7 +114,7 @@ app.post('/api/me/password', ALL, wrap(async (req, res) => {
 
 // ---------- Matières et emploi du temps ----------
 app.get('/api/subjects', ALL, wrap(async (req, res) => res.json(await all('SELECT * FROM subjects ORDER BY position, id'))));
-app.post('/api/subjects', ADMIN, wrap(async (req, res) => {
+app.post('/api/subjects', ALL, wrap(async (req, res) => {
   const name = str(req.body.name, 40); if (!name) throw fail(400, 'Nom requis');
   const pos = (await one('SELECT COALESCE(MAX(position),0)+1 AS p FROM subjects')).p;
   const id = await insert('INSERT INTO subjects(name, short, is_spe, review_daily, position) VALUES (?,?,?,?,?)',
