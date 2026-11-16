@@ -43,7 +43,7 @@ export async function seed({ demo, accounts = DEFAULT_ACCOUNTS }) {
   });
   if (!demo) return console.log(`Base prête (sans données d'exemple) en ${Date.now() - T0} ms.`);
 
-  const { today, addDays, weekStart, generateDay, diffDays } = await import('./planner.js');
+  const { today, addDays, weekStart, generateDay, diffDays, weekday } = await import('./planner.js');
   const sid = Object.fromEntries((await all('SELECT id, short FROM subjects')).map((s) => [s.short, s.id]));
   const parentId = (await one("SELECT id FROM users WHERE role = 'parent' ORDER BY id LIMIT 1"))?.id ?? null;
   const T = today();
@@ -81,7 +81,7 @@ export async function seed({ demo, accounts = DEFAULT_ACCOUNTS }) {
 
   // Rendus du jour : la plupart des soirs des 3 dernières semaines
   for (let d = addDays(ws, -21); d < T; d = addDays(d, 1)) {
-    if (diffDays(addDays(ws, -21), d) % 5 !== 3) await run('INSERT INTO daily_reports(date, submitted_at) VALUES (?,?)', d, `${d}T20:30:00.000Z`);
+    if (weekday(d) <= 5 && diffDays(addDays(ws, -21), d) % 5 !== 3) await run('INSERT INTO daily_reports(date, submitted_at) VALUES (?,?)', d, `${d}T20:30:00.000Z`);
   }
   const g = (subj, d, title, v, coef = 1) => run('INSERT INTO grades(subject_id,date,title,value,out_of,coef) VALUES (?,?,?,?,20,?)', sid[subj], addDays(T, d), title, v, coef);
   await g('MATH', -60, 'DS 1 : fonctions', 9.5); await g('MATH', -40, 'DS 2 : suites', 11); await g('MATH', -23, 'DS 3 : second degré', 10.5);

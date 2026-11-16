@@ -152,6 +152,16 @@ CREATE TABLE IF NOT EXISTS weekly_quizzes (
   last_score INTEGER,
   passed_at TEXT
 );
+-- Alertes pour les parents (rendu incomplet…)
+CREATE TABLE IF NOT EXISTS alerts (
+  id SERIAL PRIMARY KEY,
+  kind TEXT NOT NULL,
+  date TEXT NOT NULL,
+  message TEXT NOT NULL,
+  details TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT ${NOW},
+  seen_at TEXT
+);
 CREATE TABLE IF NOT EXISTS grades (
   id SERIAL PRIMARY KEY,
   subject_id INTEGER NOT NULL REFERENCES subjects(id) ON DELETE CASCADE,
@@ -182,7 +192,7 @@ CREATE TABLE IF NOT EXISTS quizzes (
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 `;
 
-export const TABLES = ['weekly_quizzes', 'quizzes', 'rewards', 'grades', 'daily_reports', 'weekly_reports', 'generated_days', 'tasks', 'events', 'timetable', 'subjects', 'sessions', 'users', 'settings'];
+export const TABLES = ['alerts', 'weekly_quizzes', 'quizzes', 'rewards', 'grades', 'daily_reports', 'weekly_reports', 'generated_days', 'tasks', 'events', 'timetable', 'subjects', 'sessions', 'users', 'settings'];
 
 let ready;
 // À appeler avant la première requête (création des tables si besoin, une fois par démarrage)
@@ -193,6 +203,15 @@ export function ensureSchema() {
       for (const stmt of SCHEMA.split(';').map((s) => s.trim()).filter(Boolean)) await d.query(stmt);
       // Sécurité Supabase : sans politique, l'API publique de Supabase (clé « publishable ») ne peut lire
       // aucune table. Seul notre serveur, connecté directement à Postgres, y a accès.
+      // Colonnes ajoutées après la mise en ligne (bases déjà créées)
+      for (const stmt of [
+        'ALTER TABLE daily_reports ADD COLUMN IF NOT EXISTS total INTEGER',
+        'ALTER TABLE daily_reports ADD COLUMN IF NOT EXISTS done INTEGER',
+        "ALTER TABLE daily_reports ADD COLUMN IF NOT EXISTS missing TEXT NOT NULL DEFAULT '[]'",
+        'ALTER TABLE weekly_reports ADD COLUMN IF NOT EXISTS total INTEGER',
+        'ALTER TABLE weekly_reports ADD COLUMN IF NOT EXISTS done INTEGER',
+        "ALTER TABLE weekly_reports ADD COLUMN IF NOT EXISTS missing TEXT NOT NULL DEFAULT '[]'",
+      ]) await d.query(stmt);
       for (const t of TABLES) await d.query(`ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY`);
     })();
     ready.catch(() => { ready = null; });

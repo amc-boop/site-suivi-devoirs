@@ -99,7 +99,9 @@ app.post('/api/logout', wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 app.get('/api/me', wrap(async (req, res) => {
-  res.json({ user: await currentUser(req), quizEnabled: geminiEnabled(), today: today() });
+  const user = await currentUser(req);
+  const alerts = user && user.role !== 'eleve' ? (await computeAlerts()).length : 0;
+  res.json({ user, quizEnabled: geminiEnabled(), today: today(), alerts });
 }));
 app.post('/api/me/password', ALL, wrap(async (req, res) => {
   const u = await one('SELECT * FROM users WHERE id = ?', req.user.id);
@@ -358,14 +360,19 @@ app.delete('/api/events/:id', ALL, wrap(async (req, res) => { await run('DELETE 
 // ---------- Rendu de la semaine ----------
 async function weekReport(ws) {
   const we = addDays(ws, 6);
-  const [tasks, report, days, quiz, stats] = await Promise.all([
+  const sat = addDays(ws, 5);
+  const [tasks, report, days, quiz, stats, weekendTasks] = await Promise.all([
     all(`${taskRow} WHERE t.original_date BETWEEN ? AND ? ORDER BY t.original_date, t.id`, ws, we),
     one(`SELECT r.*, u.display_name AS seen_by_name FROM weekly_reports r LEFT JOIN users u ON u.id = r.seen_by WHERE week_start = ?`, ws),
-    all('SELECT date, submitted_at FROM daily_reports WHERE date BETWEEN ? AND ? ORDER BY date', ws, we),
+    all('SELECT date, submitted_at, total, done, missing FROM daily_reports WHERE date BETWEEN ? AND ? ORDER BY date', ws, we),
     weeklyQuizSummary(ws),
     weekStats(ws),
+    // Tâches prévues samedi et dimanche dans l'agenda : le rendu du week-end
+    all(`${taskRow} WHERE t.date BETWEEN ? AND ? ORDER BY t.date, t.id`, sat, we),
   ]);
-  return { week_start: ws, today: today(), stats, report: report || null, tasks, dayReports: days,
+  return { week_start: ws, today: today(), stats, report: report ? { ...report, missing: JSON.parse(report.missing || '[]') } : null, tasks,
+    dayReports: days.map((d) => ({ ...d, missing: JSON.parse(d.missing || '[]') })),
+    weekendTasks: sortTasks(weekendTasks).sort((x, y) => x.date.localeCompare(y.date)), canSubmit: today() >= we,
     quiz: quiz ? { ...quiz, required: true } : { required: await weeklyQuizPossible(ws), passed_at: null } };
 }
 
@@ -376,36 +383,116 @@ app.post('/api/weekly-quiz/generate', STUDENT, wrap(async (req, res) => res.json
 app.post('/api/weekly-quiz/answer', STUDENT, wrap(async (req, res) => res.json(await answerQuestion(wsOf(req.body.week), Number(req.body.i), req.body.choice))));
 app.post('/api/weekly-quiz/finish', STUDENT, wrap(async (req, res) => res.json(await finishAttempt(wsOf(req.body.week)))));
 
-// ---------- Rendu du jour ----------
+// ---------- Rendus : du jour (lundi → vendredi) et du week-end (samedi + dimanche, le dimanche soir) ----------
+const DAY_NAMES = ['', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+// Toutes les tâches prévues dans l'agenda pour ces jours-là, et celles qui ne sont pas faites
+async function checkTasks(dates) {
+  const tasks = await all(`SELECT id, title, date, done_at FROM tasks WHERE date IN (${dates.map(() => '?').join(',')}) ORDER BY date, id`, ...dates);
+  const missing = tasks.filter((t) => !t.done_at).map((t) => ({ id: t.id, title: t.title, date: t.date }));
+  return { total: tasks.length, done: tasks.length - missing.length, missing };
+}
+// Une alerte par sujet : on remplace l'alerte non vue précédente
+async function setAlert(kind, date, message, details) {
+  await run('DELETE FROM alerts WHERE kind = ? AND date = ? AND seen_at IS NULL', kind, date);
+  if (message) await run('INSERT INTO alerts(kind, date, message, details) VALUES (?,?,?,?)', kind, date, message, details || '');
+}
+const missingText = (m) => m.map((t) => `• ${t.title}`).join('\n');
+
 async function dayReport(D) {
-  const [tasks, report] = await Promise.all([all(`${taskRow} WHERE t.date = ?`, D), one('SELECT * FROM daily_reports WHERE date = ?', D)]);
-  return { date: D, today: today(), tasks: sortTasks(tasks), report: report || null };
+  const ws = weekStart(D);
+  const weekdays = Array.from({ length: 5 }, (_, i) => addDays(ws, i));
+  const [tasks, report, reports, counts] = await Promise.all([
+    all(`${taskRow} WHERE t.date = ?`, D),
+    one('SELECT * FROM daily_reports WHERE date = ?', D),
+    all(`SELECT date, submitted_at, total, done FROM daily_reports WHERE date BETWEEN ? AND ?`, weekdays[0], weekdays[4]),
+    all(`SELECT date, COUNT(*)::int AS total, COUNT(done_at)::int AS done FROM tasks WHERE date BETWEEN ? AND ? GROUP BY date`, weekdays[0], weekdays[4]),
+  ]);
+  const days = weekdays.map((d) => ({ date: d, report: reports.find((r) => r.date === d) || null, ...(counts.find((c) => c.date === d) || { total: 0, done: 0 }) }));
+  return { date: D, today: today(), tasks: sortTasks(tasks), report: report ? { ...report, missing: JSON.parse(report.missing || '[]') } : null, days };
 }
 app.get('/api/day-report', ALL, wrap(async (req, res) => {
-  const D = isDate(req.query.date) ? req.query.date : today();
-  if (D <= today()) await ensureUpTo();
+  const T = today();
+  let D = isDate(req.query.date) ? req.query.date : T;
+  // Le week-end, le rendu du jour affiche le vendredi (le samedi et le dimanche ont leur rendu du week-end)
+  if (weekday(D) >= 6) D = addDays(weekStart(D), 4);
+  if (D <= T) await ensureUpTo();
   res.json(await dayReport(D));
 }));
 app.post('/api/day-report/submit', STUDENT, wrap(async (req, res) => {
-  const D = isDate(req.body.date) ? req.body.date : today();
-  if (D > today()) throw fail(400, 'On ne peut pas valider une journée à venir.');
-  await run(`INSERT INTO daily_reports(date, submitted_at, comment) VALUES (?,?,?)
-    ON CONFLICT(date) DO UPDATE SET submitted_at = excluded.submitted_at, comment = excluded.comment`, D, nowIso(), str(req.body.comment, 500));
+  const T = today();
+  const D = isDate(req.body.date) ? req.body.date : T;
+  if (weekday(D) >= 6) throw fail(400, 'Le samedi et le dimanche se rendent ensemble, dans le rendu du week-end (dimanche soir).');
+  if (D > T) throw fail(400, 'On ne peut pas valider une journée à venir.');
+  if (D < addDays(T, -13)) throw fail(400, 'Cette journée est trop ancienne pour être rendue.');
+  const c = await checkTasks([D]);
+  await run(`INSERT INTO daily_reports(date, submitted_at, comment, total, done, missing) VALUES (?,?,?,?,?,?)
+    ON CONFLICT(date) DO UPDATE SET submitted_at = excluded.submitted_at, comment = excluded.comment, total = excluded.total, done = excluded.done, missing = excluded.missing`,
+    D, nowIso(), str(req.body.comment, 500), c.total, c.done, JSON.stringify(c.missing));
+  // Il manque des tâches prévues dans l'agenda : alerte pour les parents
+  await setAlert('jour_incomplet', D, c.missing.length
+    ? `Rendu du ${DAY_NAMES[weekday(D)]} incomplet : ${c.missing.length} tâche${c.missing.length > 1 ? 's' : ''} sur ${c.total} pas faite${c.missing.length > 1 ? 's' : ''}`
+    : null, missingText(c.missing));
   res.json(await dayReport(D));
 }));
 app.get('/api/report', ALL, wrap(async (req, res) => res.json(await weekReport(wsOf(req.query.week)))));
 app.post('/api/report/submit', STUDENT, wrap(async (req, res) => {
   const ws = wsOf(req.body.week);
-  // Le rendu de la semaine ne part qu'après avoir réussi le quiz de la semaine
+  const sat = addDays(ws, 5), sun = addDays(ws, 6);
+  if (today() < sun) throw fail(400, 'Le rendu du week-end se fait le dimanche soir.');
+  // Le rendu du week-end ne part qu'après avoir réussi le quiz de la semaine
   // (sauf s'il n'y a vraiment rien pour le construire : aucune tâche cochée ni quiz)
   if (!(await weeklyQuizPassed(ws)) && ((await weeklyQuizSummary(ws)) || (await weeklyQuizPossible(ws)))) {
     throw fail(400, `Réussis d'abord le quiz de la semaine (${(await limits()).weeklyQuizPass} % de bonnes réponses) pour envoyer ton rendu.`);
   }
-  await run(`INSERT INTO weekly_reports(week_start, submitted_at, student_comment) VALUES (?,?,?)
+  const c = await checkTasks([sat, sun]);
+  await run(`INSERT INTO weekly_reports(week_start, submitted_at, student_comment, total, done, missing) VALUES (?,?,?,?,?,?)
     ON CONFLICT(week_start) DO UPDATE SET submitted_at = excluded.submitted_at, student_comment = excluded.student_comment,
-      status = CASE WHEN weekly_reports.status = 'a_revoir' THEN NULL ELSE weekly_reports.status END`, ws, nowIso(), str(req.body.comment, 1000));
+      total = excluded.total, done = excluded.done, missing = excluded.missing,
+      status = CASE WHEN weekly_reports.status = 'a_revoir' THEN NULL ELSE weekly_reports.status END`,
+    ws, nowIso(), str(req.body.comment, 1000), c.total, c.done, JSON.stringify(c.missing));
+  await setAlert('weekend_incomplet', sat, c.missing.length
+    ? `Rendu du week-end incomplet : ${c.missing.length} tâche${c.missing.length > 1 ? 's' : ''} sur ${c.total} pas faite${c.missing.length > 1 ? 's' : ''}`
+    : null, missingText(c.missing));
   res.json(await weekReport(ws));
 }));
+
+// ---------- Alertes pour les parents ----------
+// Alertes enregistrées (rendu incomplet) + rendus oubliés, calculés à la volée
+async function computeAlerts() {
+  const T = today();
+  const first = (await one('SELECT MIN(original_date) AS d FROM tasks'))?.d;
+  if (!first) return [];
+  const from = [addDays(T, -14), first].sort()[1];
+  const [stored, seen, dayReps, weekReps, counts] = await Promise.all([
+    all('SELECT * FROM alerts WHERE seen_at IS NULL ORDER BY date DESC, id DESC LIMIT 30'),
+    all('SELECT kind, date FROM alerts WHERE seen_at IS NOT NULL AND date >= ?', from),
+    all('SELECT date FROM daily_reports WHERE date >= ?', from),
+    all('SELECT week_start FROM weekly_reports WHERE submitted_at IS NOT NULL AND week_start >= ?', addDays(from, -6)),
+    all('SELECT date, COUNT(*)::int AS n FROM tasks WHERE date >= ? AND date < ? GROUP BY date', from, T),
+  ]);
+  const isSeen = (k, d) => seen.some((x) => x.kind === k && x.date === d);
+  const out = stored.map((a) => ({ id: a.id, kind: a.kind, date: a.date, message: a.message, details: a.details }));
+  for (const { date, n } of counts) {
+    const wd = weekday(date);
+    // Jour de semaine passé, avec des tâches prévues, sans rendu
+    if (wd <= 5 && n > 0 && !dayReps.some((r) => r.date === date) && !isSeen('jour_manquant', date)) {
+      out.push({ kind: 'jour_manquant', date, message: `Pas de rendu le ${DAY_NAMES[wd]} ${Number(date.slice(8))} (${n} tâche${n > 1 ? 's' : ''} prévue${n > 1 ? 's' : ''})`, details: '' });
+    }
+    // Week-end terminé sans rendu (alerte posée sur le samedi)
+    if (wd === 6 && addDays(date, 1) < T && !weekReps.some((r) => r.week_start === weekStart(date)) && !isSeen('weekend_manquant', date)) {
+      out.push({ kind: 'weekend_manquant', date, message: `Pas de rendu du week-end du ${Number(date.slice(8))}`, details: '' });
+    }
+  }
+  return out.sort((a, b) => b.date.localeCompare(a.date));
+}
+app.get('/api/alerts', PARENT, wrap(async (req, res) => res.json(await computeAlerts())));
+app.post('/api/alerts/seen', PARENT, wrap(async (req, res) => {
+  const { id, kind, date } = req.body;
+  if (id) await run('UPDATE alerts SET seen_at = ? WHERE id = ?', nowIso(), int(id));
+  else if (kind && isDate(date)) await run('INSERT INTO alerts(kind, date, message, seen_at) VALUES (?,?,?,?)', str(kind, 30), date, 'vu', nowIso());
+  res.json({ ok: true });
+}));
+
 // Les parents valident le rendu de la semaine, ou le renvoient « à revoir » avec un commentaire
 app.post('/api/report/seen', PARENT, wrap(async (req, res) => {
   const ws = wsOf(req.body.week);

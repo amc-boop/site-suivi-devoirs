@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Sun, CalendarDays, Send, LineChart, Brain, ClipboardCheck, Gift, Settings, LogOut, UserRound, Clock, CircleCheck, TriangleAlert } from 'lucide-react';
 import { api, ROLE_LABEL } from './lib.js';
-import { AppCtx, Skeleton } from './ui.jsx';
+import { AppCtx, Skeleton, useAutoRefresh } from './ui.jsx';
 import Login from './pages/Login.jsx';
 import Today from './pages/Today.jsx';
 import Agenda from './pages/Agenda.jsx';
@@ -42,6 +42,9 @@ export default function App() {
     } catch { setMe({ user: null }); }
   }, []);
   useEffect(() => { load(); }, [load]);
+  // Nombre d'alertes (pastille rouge sur « Bilan » pour les parents), tenu à jour
+  const refreshAlerts = useCallback(() => api('/me').then((r) => setMe((m) => (m?.user ? { ...m, alerts: r.alerts } : m))).catch(() => {}), []);
+  useAutoRefresh(refreshAlerts);
   useEffect(() => { const f = () => setMe((m) => ({ ...m, user: null })); window.addEventListener('auth-lost', f); return () => window.removeEventListener('auth-lost', f); }, []);
 
   const toast = useCallback((msg, tone) => { setToastMsg({ msg, tone, id: Date.now() }); }, []);
@@ -60,7 +63,7 @@ export default function App() {
   async function logout() { await api('/logout', { method: 'POST' }).catch(() => {}); setMe({ user: null }); window.location.hash = ''; }
 
   return (
-    <AppCtx.Provider value={{ user, subjects, reloadSubjects: async () => setSubjects(await api('/subjects')), toast, quizEnabled: me.quizEnabled }}>
+    <AppCtx.Provider value={{ user, subjects, refreshAlerts, reloadSubjects: async () => setSubjects(await api('/subjects')), toast, quizEnabled: me.quizEnabled }}>
       <div className="app">
         <header className="topbar">
           <span className="brand">SUIVI !</span>
@@ -72,7 +75,7 @@ export default function App() {
         <nav className="nav" aria-label="Navigation principale">
           {nav.map(([href, label, Icon]) => (
             <a key={href} href={`#${href}`} className={path === href ? 'on' : ''} aria-current={path === href ? 'page' : undefined}>
-              <span className="nav-ico"><Icon size={20} /></span>{label}
+              <span className="nav-ico"><Icon size={20} />{href === '/bilan' && me.alerts > 0 && <span className="dot" aria-label={`${me.alerts} alerte(s)`} />}</span>{label}
             </a>
           ))}
         </nav>
