@@ -11,6 +11,7 @@ import { publicQuiz, generateWeeklyQuiz, answerQuestion, finishAttempt, weeklyQu
 import { hashPassword, verifyPassword } from './auth.js';
 import { savePhoto, readPhoto, deletePhoto } from './storage.js';
 import { seedIfEmpty } from './seed.js';
+import { computeProgress } from './progress.js';
 import { pushEnabled, publicKey, saveSubscription, removeSubscription, countSubscriptions, notifyUser, notifyParents, eveningRun } from './push.js';
 
 export const app = express();
@@ -486,6 +487,9 @@ app.get('/api/cron/evening', wrap(async (req, res) => {
   if (!secret || req.get('authorization') !== `Bearer ${secret}`) throw fail(401, 'Non autorisé');
   res.json(await eveningRun({ force: req.query.force === '1' }));
 }));
+
+// ---------- Série, points, niveaux, badges ----------
+app.get('/api/progress', ALL, wrap(async (req, res) => res.json(await computeProgress())));
 
 // ---------- Alertes pour les parents ----------
 // Alertes enregistrées (rendu incomplet) + rendus oubliés, calculés à la volée

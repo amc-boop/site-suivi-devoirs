@@ -14,13 +14,14 @@ import Rewards from './pages/Rewards.jsx';
 import Admin from './pages/Admin.jsx';
 import Compte from './pages/Compte.jsx';
 import Edt from './pages/Edt.jsx';
+import Progression from './pages/Progression.jsx';
 
 const NAV = {
   eleve: [['/', 'Aujourd’hui', Sun], ['/agenda', 'Agenda', CalendarDays], ['/rendu', 'Rendu', Send], ['/notes', 'Notes', LineChart], ['/quiz', 'Quiz', Brain]],
   parent: [['/bilan', 'Bilan', ClipboardCheck], ['/agenda', 'Agenda', CalendarDays], ['/edt', 'Emploi du t.', Clock], ['/recompenses', 'Récomp.', Gift], ['/notes', 'Notes', LineChart]],
   admin: [['/', 'Aujourd’hui', Sun], ['/agenda', 'Agenda', CalendarDays], ['/bilan', 'Bilan', ClipboardCheck], ['/recompenses', 'Récomp.', Gift], ['/admin', 'Réglages', Settings]],
 };
-const PAGES = { '/': Today, '/agenda': Agenda, '/rendu': Rendu, '/notes': Notes, '/quiz': Quiz, '/bilan': Bilan, '/recompenses': Rewards, '/admin': Admin, '/compte': Compte, '/edt': Edt };
+const PAGES = { '/': Today, '/agenda': Agenda, '/rendu': Rendu, '/notes': Notes, '/quiz': Quiz, '/bilan': Bilan, '/recompenses': Rewards, '/admin': Admin, '/compte': Compte, '/edt': Edt, '/progression': Progression };
 
 const useRoute = () => {
   const get = () => (window.location.hash.replace(/^#/, '') || '/').split('?')[0];

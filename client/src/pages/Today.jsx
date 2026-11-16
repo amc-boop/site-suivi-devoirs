@@ -3,6 +3,7 @@ import { Plus, TriangleAlert, ChevronRight, CircleCheck, ListTodo, FileText, Tre
 import { api, dayLabel, relDays, shortDate } from '../lib.js';
 import { useApp, TaskItem, AddSheet, Skeleton, Empty, Bar, useAutoRefresh } from '../ui.jsx';
 import { NotificationsBanner } from '../Notifications.jsx';
+import { ProgressCard, useProgress } from './Progression.jsx';
 
 // Tuile de compte à rebours (J-x) ; rouge à J-3 ou moins
 function CountdownKpi({ label, ev, empty, wide }) {
@@ -38,6 +39,7 @@ function Kpi({ label, value, sub, tone, icon: Icon, href }) {
 
 export default function Today() {
   const { toast, startFocus } = useApp();
+  const progress = useProgress();
   const [data, setData] = useState(null);
   const [adding, setAdding] = useState(false);
   const [showLate, setShowLate] = useState(false);
@@ -79,6 +81,7 @@ export default function Today() {
           tone={data.week.pct >= 80 ? 'ok' : ''} />
       </div>
 
+      <ProgressCard p={progress} />
       <NotificationsBanner />
 
       <div className="section row" style={{ alignItems: 'flex-end' }}>
