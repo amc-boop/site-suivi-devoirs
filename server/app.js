@@ -18,11 +18,25 @@ app.disable('x-powered-by');
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 
+// Diagnostic de la mise en ligne (aucune valeur secrète n'est renvoyée) : /api/health
+app.get('/api/health', async (req, res) => {
+  const env = Object.fromEntries(['DATABASE_URL', 'SUPABASE_URL', 'SUPABASE_SECRET_KEY', 'GEMINI_API_KEY'].map((k) => [k, Boolean(process.env[k])]));
+  let db = 'ok';
+  try { await ensureSchema(); await one('SELECT 1 AS ok'); } catch (e) { db = `${e.code || e.name}: ${String(e.message).replace(/postgres(ql)?:\/\/\S+/g, '<url>').slice(0, 160)}`; }
+  res.status(db === 'ok' ? 200 : 500).json({ env, db, vercel: Boolean(process.env.VERCEL) });
+});
+
 // Tables créées au premier appel ; en local, base de démo si elle est vide
 let booted;
 app.use((req, res, next) => {
+  // En ligne sans DATABASE_URL, la base locale ne peut pas fonctionner : message clair plutôt qu'une erreur obscure
+  if (process.env.VERCEL && !process.env.DATABASE_URL) return next(Object.assign(new Error('Configuration incomplète : DATABASE_URL manque dans les variables d’environnement Vercel.'), { status: 503 }));
   booted ||= ensureSchema().then(seedIfEmpty);
-  booted.then(() => next(), (e) => { booted = null; next(e); });
+  booted.then(() => next(), (e) => {
+    booted = null;
+    console.error('Démarrage de la base impossible :', e.code, e.message);
+    next(Object.assign(new Error('Base de données injoignable. Vérifie DATABASE_URL (mot de passe, port 6543).'), { status: 503 }));
+  });
 });
 
 // ---------- Utilitaires ----------
