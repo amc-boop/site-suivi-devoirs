@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import { flushSync } from 'react-dom';
 import { Sun, CalendarDays, Send, LineChart, Brain, ClipboardCheck, Gift, Settings, LogOut, UserRound, Clock, CircleCheck, TriangleAlert } from 'lucide-react';
 import { api, ROLE_LABEL } from './lib.js';
 import { AppCtx, Skeleton, useAutoRefresh } from './ui.jsx';
@@ -16,7 +15,7 @@ import Admin from './pages/Admin.jsx';
 import Compte from './pages/Compte.jsx';
 import Edt from './pages/Edt.jsx';
 import Progression from './pages/Progression.jsx';
-import { ScrollBackdrop, BrushTrail } from './gesture.jsx';
+import Backdrop from './Backdrop.jsx';
 
 const NAV = {
   eleve: [['/', 'Aujourd’hui', Sun], ['/agenda', 'Agenda', CalendarDays], ['/rendu', 'Rendu', Send], ['/notes', 'Notes', LineChart], ['/quiz', 'Quiz', Brain]],
@@ -28,11 +27,7 @@ const PAGES = { '/': Today, '/agenda': Agenda, '/rendu': Rendu, '/notes': Notes,
 const useRoute = () => {
   const get = () => (window.location.hash.replace(/^#/, '') || '/').split('?')[0];
   const [route, setRoute] = useState(get);
-  useEffect(() => { const f = () => {
-      const go = () => { setRoute(get()); window.scrollTo(0, 0); };
-      // Transition « coup de pinceau » quand le navigateur sait faire
-      if (document.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches) document.startViewTransition(() => flushSync(go)); else go();
-    }; window.addEventListener('hashchange', f); return () => window.removeEventListener('hashchange', f); }, []);
+  useEffect(() => { const f = () => { setRoute(get()); window.scrollTo(0, 0); }; window.addEventListener('hashchange', f); return () => window.removeEventListener('hashchange', f); }, []);
   return route;
 };
 
@@ -83,16 +78,15 @@ export default function App() {
 
   return (
     <AppCtx.Provider value={{ user, subjects, refreshAlerts, startFocus: user.role === 'parent' ? null : (t) => setFocus(startFocusSession(t)), reloadSubjects: async () => setSubjects(await api('/subjects')), toast, quizEnabled: me.quizEnabled }}>
-      <ScrollBackdrop />
-      <BrushTrail />
+      <Backdrop />
       <div className="app">
         <header className="topbar">
-          <span className="brand">Sui<em>vi</em></span>
+          <span className="brand">SUIVI !</span>
           <span className="who">{user.display_name} · {ROLE_LABEL[user.role]}</span>
           <a className="icon-btn plain" href="#/compte" aria-label="Mon compte"><UserRound size={20} /></a>
           <button className="icon-btn plain" onClick={logout} aria-label="Se déconnecter"><LogOut size={20} /></button>
         </header>
-        <main key={path}><Page /></main>
+        <main key={path} style={{ animation: 'fade .2s ease-out' }}><Page /></main>
         <nav className="nav" aria-label="Navigation principale">
           {nav.map(([href, label, Icon]) => (
             <a key={href} href={`#${href}`} className={path === href ? 'on' : ''} aria-current={path === href ? 'page' : undefined}>
