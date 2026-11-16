@@ -6,12 +6,14 @@ import { DATA_DIR } from './db.js';
 
 const BUCKET = 'photos';
 const URL_ = process.env.SUPABASE_URL?.replace(/\/$/, '');
-const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// Nouvelle clé secrète (sb_secret_…) ou ancienne clé service_role : les deux noms sont acceptés
+const KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 export const usingSupabaseStorage = Boolean(URL_ && KEY);
 const LOCAL = path.join(DATA_DIR, 'uploads');
 const EXT = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/heic': '.heic', 'image/heif': '.heif', 'image/gif': '.gif' };
 export const MIME = Object.fromEntries(Object.entries(EXT).map(([m, e]) => [e, m]));
-const headers = (extra = {}) => ({ Authorization: `Bearer ${KEY}`, apikey: KEY, ...extra });
+// Les clés « sb_secret_ » ne sont pas des JWT : elles passent seulement dans l'en-tête apikey
+const headers = (extra = {}) => (KEY?.startsWith('sb_') ? { apikey: KEY, ...extra } : { Authorization: `Bearer ${KEY}`, apikey: KEY, ...extra });
 
 let bucketReady;
 async function ensureBucket() {

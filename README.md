@@ -58,9 +58,9 @@ Sans clé, l'onglet Quiz affiche « Quiz pas encore activé » et rien ne casse.
 
 ## Mise en ligne (Supabase + Vercel, gratuit)
 
-1. **Supabase** (https://supabase.com) : nouveau projet, région Paris. Remplir dans `.env` : `DATABASE_URL` (bouton Connect → Transaction pooler, port 6543), `SUPABASE_URL` et `SUPABASE_SERVICE_ROLE_KEY` (voir `.env.example`).
+1. **Supabase** (https://supabase.com) : nouveau projet, région Paris. Remplir dans `.env` : `DATABASE_URL` (bouton Connect → Transaction pooler, port 6543), `SUPABASE_URL` et `SUPABASE_SECRET_KEY` (voir `.env.example`).
 2. **Créer les tables et les comptes** depuis l'ordinateur : `npm run db:init`. Les mots de passe sont générés au hasard et écrits dans `identifiants.txt` (ignoré par Git). La commande refuse d'écraser une base déjà remplie.
-3. **Vercel** (https://vercel.com) : « Add New → Project », importer le dépôt GitHub, puis dans *Environment Variables* ajouter `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `GEMINI_API_KEY` (et `GEMINI_MODEL` si besoin). Déployer : `vercel.json` s'occupe du reste (site statique + API dans une fonction).
+3. **Vercel** (https://vercel.com) : « Add New → Project », importer le dépôt GitHub, puis dans *Environment Variables* ajouter `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `GEMINI_API_KEY` (et `GEMINI_MODEL` si besoin). Déployer : `vercel.json` s'occupe du reste (site statique + API dans une fonction).
 4. Les photos sont stockées dans Supabase Storage (bucket privé `photos`, créé automatiquement) et réduites sur le téléphone avant l'envoi.
 
 En local, pour travailler sur une base de test même quand `.env` contient `DATABASE_URL` : `DATABASE_URL= npm run dev`.
