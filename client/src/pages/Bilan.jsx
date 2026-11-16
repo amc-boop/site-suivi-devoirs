@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Eye, Camera, TriangleAlert, ChevronRight, Plus, CircleCheck, Undo2 } from 'lucide-react';
 import { api, weekLabel, shortDate, EVENT_LABEL } from '../lib.js';
-import { useApp, Skeleton, Sheet, Pct, Bar, Lightbox, Empty, Flag, AddSheet } from '../ui.jsx';
+import { useApp, Skeleton, Sheet, Pct, Bar, Lightbox, Empty, Flag, AddSheet, useAutoRefresh } from '../ui.jsx';
 import { WeekTasks, WeekStatus, DaysChecklist } from './Rendu.jsx';
 
 function WeeksChart({ weeks }) {
@@ -100,8 +100,9 @@ export default function Bilan() {
   const [data, setData] = useState(null);
   const [open, setOpen] = useState(null);
   const [adding, setAdding] = useState(false);
-  const load = useCallback(() => api('/overview').then(setData).catch((e) => toast(e.message, 'red')), [toast]);
+  const load = useCallback((silent) => api('/overview').then(setData).catch((e) => !silent && toast(e.message, 'red')), [toast]);
   useEffect(() => { load(); }, [load]);
+  useAutoRefresh(load);
   if (!data) return <div className="page"><Skeleton n={5} /></div>;
 
   const cur = data.weeks[0];

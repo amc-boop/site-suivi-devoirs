@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Plus, TriangleAlert, ChevronRight, CircleCheck, ListTodo, FileText, TrendingUp } from 'lucide-react';
 import { api, dayLabel, relDays, shortDate } from '../lib.js';
-import { useApp, TaskItem, AddSheet, Skeleton, Empty, Bar } from '../ui.jsx';
+import { useApp, TaskItem, AddSheet, Skeleton, Empty, Bar, useAutoRefresh } from '../ui.jsx';
 
 // Tuile de compte à rebours (J-x) ; rouge à J-3 ou moins
 function CountdownKpi({ label, ev, empty, wide }) {
@@ -41,12 +41,13 @@ export default function Today() {
   const [adding, setAdding] = useState(false);
   const [showLate, setShowLate] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (silent) => {
     try {
       setData(await api('/today'));
-    } catch (e) { toast(e.message, 'red'); }
+    } catch (e) { if (!silent) toast(e.message, 'red'); }
   }, [toast]);
   useEffect(() => { load(); }, [load]);
+  useAutoRefresh(load);
 
   if (!data) return <div className="page"><Skeleton n={4} /></div>;
 

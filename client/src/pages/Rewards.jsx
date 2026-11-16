@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Gift, Plus, Trash2, Check } from 'lucide-react';
 import { api } from '../lib.js';
-import { useApp, Skeleton, Sheet, Bar, Empty, SubjectChips, Flag } from '../ui.jsx';
+import { useApp, Skeleton, Sheet, Bar, Empty, SubjectChips, Flag, useAutoRefresh } from '../ui.jsx';
 
 function NewReward({ onClose, onDone }) {
   const { toast } = useApp();
@@ -59,8 +59,9 @@ export default function Rewards() {
   const { user, toast } = useApp();
   const [list, setList] = useState(null);
   const [adding, setAdding] = useState(false);
-  const load = useCallback(() => api('/rewards').then(setList).catch((e) => toast(e.message, 'red')), [toast]);
+  const load = useCallback((silent) => api('/rewards').then(setList).catch((e) => !silent && toast(e.message, 'red')), [toast]);
   useEffect(() => { load(); }, [load]);
+  useAutoRefresh(load);
   const canEdit = user.role !== 'eleve';
 
   async function give(r, given) { try { await api(`/rewards/${r.id}/given`, { method: 'POST', body: { given } }); load(); } catch (e) { toast(e.message, 'red'); } }

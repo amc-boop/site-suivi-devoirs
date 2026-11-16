@@ -6,6 +6,26 @@ import { api, addDays, todayStr, weekday, shortDate, KIND_LABEL, EVENT_LABEL, DA
 export const AppCtx = createContext(null);
 export const useApp = () => useContext(AppCtx);
 
+// Mise à jour automatique : toutes les 30 s et dès que l'appli revient au premier plan.
+// On ne rafraîchit pas pendant une saisie, une fenêtre ouverte ou un glisser-déposer.
+export function useAutoRefresh(cb, ms = 30000) {
+  const ref = useRef(cb);
+  ref.current = cb;
+  useEffect(() => {
+    const run = () => {
+      const el = document.activeElement;
+      if (document.hidden || window.__suiviBusy || document.body.style.overflow === 'hidden') return;
+      if (el && ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)) return;
+      ref.current(true);
+    };
+    const id = setInterval(run, ms);
+    const onShow = () => { if (!document.hidden) run(); };
+    document.addEventListener('visibilitychange', onShow);
+    window.addEventListener('focus', onShow);
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', onShow); window.removeEventListener('focus', onShow); };
+  }, [ms]);
+}
+
 export function Sheet({ title, onClose, children }) {
   useEffect(() => {
     const k = (e) => e.key === 'Escape' && onClose();

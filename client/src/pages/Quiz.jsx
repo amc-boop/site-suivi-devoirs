@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Camera, Brain, Play, Trash2, X, Lock, CircleCheck, TriangleAlert } from 'lucide-react';
 import { api } from '../lib.js';
-import { useApp, Skeleton, Empty, SubjectChips, Bar } from '../ui.jsx';
+import { useApp, Skeleton, Empty, SubjectChips, Bar, useAutoRefresh } from '../ui.jsx';
 
 function Player({ id, onExit }) {
   const { toast } = useApp();
@@ -75,8 +75,9 @@ export default function Quiz() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const fileRef = useRef(null);
-  const load = useCallback(() => api('/quizzes').then(setList).catch((e) => toast(e.message, 'red')), [toast]);
+  const load = useCallback((silent) => api('/quizzes').then(setList).catch((e) => !silent && toast(e.message, 'red')), [toast]);
   useEffect(() => { load(); }, [load]);
+  useAutoRefresh(load);
 
   async function generate(e) {
     e.preventDefault(); setErr('');

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { api, todayStr, shortDate } from '../lib.js';
-import { useApp, Skeleton, Sheet, Empty, SubjectChips, Flag } from '../ui.jsx';
+import { useApp, Skeleton, Sheet, Empty, SubjectChips, Flag, useAutoRefresh } from '../ui.jsx';
 
 const on20 = (g) => (g.value / g.out_of) * 20;
 const average = (list) => { const c = list.reduce((s, g) => s + g.coef, 0); return c ? list.reduce((s, g) => s + on20(g) * g.coef, 0) / c : null; };
@@ -123,8 +123,9 @@ export default function Notes() {
   const [grades, setGrades] = useState(null);
   const [subj, setSubj] = useState(null);
   const [adding, setAdding] = useState(false);
-  const load = useCallback(() => api('/grades').then(setGrades).catch((e) => toast(e.message, 'red')), [toast]);
+  const load = useCallback((silent) => api('/grades').then(setGrades).catch((e) => !silent && toast(e.message, 'red')), [toast]);
   useEffect(() => { load(); }, [load]);
+  useAutoRefresh(load);
 
   const current = subj ?? 'general';
   const list = (grades || []).filter((g) => g.subject_id === current);

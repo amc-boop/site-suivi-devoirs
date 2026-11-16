@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Plus, Trash2, Check, Undo2, CalendarX2, GripVertical, TriangleAlert } from 'lucide-react';
 import { api, addDays, weekStart, todayStr, weekLabel, dayLabel, parse, DAYS_SHORT, EVENT_LABEL, KIND_LABEL } from '../lib.js';
-import { useApp, AddSheet, Skeleton, Sheet } from '../ui.jsx';
+import { useApp, AddSheet, Skeleton, Sheet, useAutoRefresh } from '../ui.jsx';
 
 // Grille horaire : de 7 h à 23 h, 1 heure = 60 px, pas de 15 minutes
 const START = 7, END = 23, PPH = 60, PPM = PPH / 60, SNAP = 15;
@@ -45,10 +45,11 @@ export default function Agenda() {
   const scrollRef = useRef(null), colsRef = useRef(null), trayRef = useRef(null), dragRef = useRef(null), lastY = useRef(0);
   const isParent = user.role === 'parent';
 
-  const load = useCallback(async () => {
-    try { setData(await api(`/week?start=${ws}`)); } catch (e) { toast(e.message, 'red'); }
+  const load = useCallback(async (silent) => {
+    try { setData(await api(`/week?start=${ws}`)); } catch (e) { if (!silent) toast(e.message, 'red'); }
   }, [ws, toast]);
   useEffect(() => { load(); }, [load]);
+  useAutoRefresh(load);
 
   // À l'ouverture : faire défiler vers 16 h (ou l'heure actuelle si plus tard)
   const scrolled = useRef(false);
@@ -80,6 +81,7 @@ export default function Agenda() {
     if (e.button !== undefined && e.button !== 0) return;
     const rect = e.currentTarget.getBoundingClientRect();
     dragRef.current = { task, sx: e.clientX, sy: e.clientY, active: false, offsetY: fromGrid ? e.clientY - rect.top : 12 };
+    window.__suiviBusy = true; // pas de rafraîchissement automatique pendant un glisser-déposer
     lastY.current = e.clientY;
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp);
@@ -94,6 +96,7 @@ export default function Agenda() {
     setDrag({ task: d.task, x: e.clientX, y: e.clientY, target: hitTest(e.clientX, e.clientY, d) });
   }
   function cleanup() {
+    window.__suiviBusy = false;
     window.removeEventListener('pointermove', onPointerMove);
     window.removeEventListener('pointerup', onPointerUp);
     window.removeEventListener('pointercancel', onPointerCancel);

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, ChevronDown, Send, TriangleAlert, CircleCheck, Hourglass, CalendarCheck, Brain, Lock, X } from 'lucide-react';
 import { api, addDays, weekStart, todayStr, weekLabel, dayLabel, weekday, DAYS_SHORT, parse } from '../lib.js';
-import { useApp, TaskItem, Skeleton, Empty, Bar, Pct, Flag } from '../ui.jsx';
+import { useApp, TaskItem, Skeleton, Empty, Bar, Pct, Flag, useAutoRefresh } from '../ui.jsx';
 
 const when = (iso) => new Date(iso).toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
 
@@ -50,10 +50,11 @@ function DayRendu() {
   const [data, setData] = useState(null);
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState(false);
-  const load = useCallback(async () => {
-    try { const d = await api('/day-report'); setData(d); setComment(d.report?.comment || ''); } catch (e) { toast(e.message, 'red'); }
+  const load = useCallback(async (silent) => {
+    try { const d = await api('/day-report'); setData(d); if (!silent) setComment(d.report?.comment || ''); } catch (e) { if (!silent) toast(e.message, 'red'); }
   }, [toast]);
   useEffect(() => { load(); }, [load]);
+  useAutoRefresh(load);
 
   async function submit() {
     setBusy(true);
@@ -218,10 +219,11 @@ function WeekRendu() {
   const weekend = weekday(todayStr()) >= 6;
   const [showDetail, setShowDetail] = useState(weekend);
 
-  const load = useCallback(async () => {
-    try { const d = await api(`/report?week=${ws}`); setData(d); setComment(d.report?.student_comment || ''); } catch (e) { toast(e.message, 'red'); }
+  const load = useCallback(async (silent) => {
+    try { const d = await api(`/report?week=${ws}`); setData(d); if (!silent) setComment(d.report?.student_comment || ''); } catch (e) { if (!silent) toast(e.message, 'red'); }
   }, [ws, toast]);
   useEffect(() => { load(); }, [load]);
+  useAutoRefresh(load);
 
   async function submit() {
     setBusy(true);
