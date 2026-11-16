@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Sun, CalendarDays, Send, LineChart, Brain, ClipboardCheck, Gift, Settings, LogOut, UserRound, Clock, CircleCheck, TriangleAlert } from 'lucide-react';
 import { api, ROLE_LABEL } from './lib.js';
 import { AppCtx, Skeleton, useAutoRefresh } from './ui.jsx';
+import { FocusScreen, savedFocus, startFocusSession } from './Focus.jsx';
 import Login from './pages/Login.jsx';
 import Today from './pages/Today.jsx';
 import Agenda from './pages/Agenda.jsx';
@@ -32,6 +33,8 @@ export default function App() {
   const [me, setMe] = useState(undefined);
   const [subjects, setSubjects] = useState([]);
   const [toastMsg, setToastMsg] = useState(null);
+  // Tâche en cours (mode concentration) : reprise automatique après un rechargement
+  const [focus, setFocus] = useState(() => savedFocus());
   const route = useRoute();
 
   const load = useCallback(async () => {
@@ -72,7 +75,7 @@ export default function App() {
   }
 
   return (
-    <AppCtx.Provider value={{ user, subjects, refreshAlerts, reloadSubjects: async () => setSubjects(await api('/subjects')), toast, quizEnabled: me.quizEnabled }}>
+    <AppCtx.Provider value={{ user, subjects, refreshAlerts, startFocus: user.role === 'parent' ? null : (t) => setFocus(startFocusSession(t)), reloadSubjects: async () => setSubjects(await api('/subjects')), toast, quizEnabled: me.quizEnabled }}>
       <div className="app">
         <header className="topbar">
           <span className="brand">SUIVI !</span>
@@ -88,6 +91,13 @@ export default function App() {
             </a>
           ))}
         </nav>
+        {focus && user.role !== 'parent' && (
+          <FocusScreen session={focus} toast={toast} onClose={(t, done) => {
+            setFocus(null);
+            toast(done ? 'FAIT ! Bien joué.' : 'Tâche mise en pause', done ? undefined : 'red');
+            window.dispatchEvent(new Event('suivi-refresh'));
+          }} />
+        )}
         {toastMsg && <div key={toastMsg.id} className={`toast ${toastMsg.tone || ''}`} role="status">{toastMsg.tone === 'red' ? <TriangleAlert size={18} /> : <CircleCheck size={18} />}{toastMsg.msg}</div>}
       </div>
     </AppCtx.Provider>

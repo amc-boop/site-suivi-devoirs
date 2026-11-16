@@ -284,7 +284,7 @@ app.post('/api/tasks', ALL, wrap(async (req, res) => {
 app.patch('/api/tasks/:id', ALL, wrap(async (req, res) => {
   const t = await one('SELECT * FROM tasks WHERE id = ?', int(req.params.id)); if (!t) throw fail(404, 'Tâche introuvable');
   // Les parents peuvent placer les tâches dans l'agenda, mais seul l'élève les coche
-  if (req.user.role === 'parent' && ('done' in req.body || req.body.title)) throw fail(403, "Seul l'élève peut cocher ses tâches.");
+  if (req.user.role === 'parent' && ('done' in req.body || req.body.title || req.body.focus)) throw fail(403, "Seul l'élève peut cocher ses tâches.");
   if ('time' in req.body) {
     if (req.body.time !== null && !isTime(req.body.time)) throw fail(400, 'Heure invalide');
     await run('UPDATE tasks SET time = ? WHERE id = ?', req.body.time, t.id);
@@ -293,6 +293,12 @@ app.patch('/api/tasks/:id', ALL, wrap(async (req, res) => {
     const d = Number(req.body.duration);
     if (!(d >= 15 && d <= 240)) throw fail(400, 'Durée invalide (15 à 240 minutes)');
     await run('UPDATE tasks SET duration = ? WHERE id = ?', Math.round(d / 15) * 15, t.id);
+  }
+  // Mode concentration : temps passé et nombre de sorties de l'appli, ajoutés à la tâche
+  if (req.body.focus && req.user.role !== 'parent') {
+    const sec = Math.max(0, Math.min(6 * 3600, Math.round(Number(req.body.focus.seconds) || 0)));
+    const exits = Math.max(0, Math.min(500, Math.round(Number(req.body.focus.exits) || 0)));
+    await run('UPDATE tasks SET focus_seconds = focus_seconds + ?, focus_exits = focus_exits + ? WHERE id = ?', sec, exits, t.id);
   }
   if ('done' in req.body) await run('UPDATE tasks SET done_at = ? WHERE id = ?', req.body.done ? nowIso() : null, t.id);
   if (req.body.title) await run('UPDATE tasks SET title = ? WHERE id = ?', str(req.body.title, 140), t.id);

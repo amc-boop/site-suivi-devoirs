@@ -214,6 +214,8 @@ export function ensureSchema() {
       // aucune table. Seul notre serveur, connecté directement à Postgres, y a accès.
       // Colonnes ajoutées après la mise en ligne (bases déjà créées)
       for (const stmt of [
+        'ALTER TABLE tasks ADD COLUMN IF NOT EXISTS focus_seconds INTEGER NOT NULL DEFAULT 0',
+        'ALTER TABLE tasks ADD COLUMN IF NOT EXISTS focus_exits INTEGER NOT NULL DEFAULT 0',
         'ALTER TABLE daily_reports ADD COLUMN IF NOT EXISTS total INTEGER',
         'ALTER TABLE daily_reports ADD COLUMN IF NOT EXISTS done INTEGER',
         "ALTER TABLE daily_reports ADD COLUMN IF NOT EXISTS missing TEXT NOT NULL DEFAULT '[]'",

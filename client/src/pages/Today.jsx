@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, TriangleAlert, ChevronRight, CircleCheck, ListTodo, FileText, TrendingUp } from 'lucide-react';
+import { Plus, TriangleAlert, ChevronRight, CircleCheck, ListTodo, FileText, TrendingUp, Play } from 'lucide-react';
 import { api, dayLabel, relDays, shortDate } from '../lib.js';
 import { useApp, TaskItem, AddSheet, Skeleton, Empty, Bar, useAutoRefresh } from '../ui.jsx';
 import { NotificationsBanner } from '../Notifications.jsx';
@@ -37,7 +37,7 @@ function Kpi({ label, value, sub, tone, icon: Icon, href }) {
 }
 
 export default function Today() {
-  const { toast } = useApp();
+  const { toast, startFocus } = useApp();
   const [data, setData] = useState(null);
   const [adding, setAdding] = useState(false);
   const [showLate, setShowLate] = useState(false);
@@ -96,6 +96,12 @@ export default function Today() {
           <CircleCheck size={30} />
           <div><span className="sfx-title">TOUT EST FAIT !</span><div className="small">Soirée libre. Cette semaine : {data.week.pct ?? 0} % des tâches faites.</div></div>
         </div>
+      )}
+
+      {startFocus && data.tasks.some((t) => !t.done_at) && (
+        <button className="btn red big block" style={{ marginTop: 14 }} onClick={() => startFocus(data.tasks.find((t) => !t.done_at))}>
+          <Play size={22} fill="currentColor" /> Commencer : {data.tasks.find((t) => !t.done_at).title}
+        </button>
       )}
 
       <div style={{ marginTop: 14 }}>
