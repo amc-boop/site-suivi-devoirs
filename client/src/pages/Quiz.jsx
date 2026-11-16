@@ -111,7 +111,7 @@ export default function Quiz() {
         </div>
       ) : (
         <form className="panel section stack" onSubmit={generate}>
-          <div><label className="f">Matière</label><SubjectChips value={subject} onChange={setSubject} onlySpe /></div>
+          <div><label className="f">Matière</label><SubjectChips value={subject} onChange={setSubject} /></div>
           <div><label className="f" htmlFor="qc">Chapitre</label><input id="qc" className="input" value={chapter} onChange={(e) => setChapter(e.target.value)} placeholder="Ex. Dérivation" /></div>
           <div>
             <button type="button" className="btn ghost block big" onClick={() => fileRef.current?.click()}><Camera size={22} /> {files.length ? `${files.length} photo${files.length > 1 ? 's' : ''} (ajouter)` : 'Prendre le cours en photo'}</button>

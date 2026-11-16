@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Camera, X, BookOpen, FileText, RotateCcw, PenLine, CalendarPlus, Plus, Trash2, CalendarClock, CircleCheck, TriangleAlert, UsersRound } from 'lucide-react';
+import { Check, Camera, X, BookOpen, FileText, RotateCcw, PenLine, CalendarPlus, Plus, Trash2, CalendarClock, CircleCheck, TriangleAlert, UsersRound, Play, Timer } from 'lucide-react';
 import { api, compressImage, addDays, todayStr, weekday, shortDate, KIND_LABEL, EVENT_LABEL, DAYS } from './lib.js';
 
 export const AppCtx = createContext(null);
@@ -22,7 +22,10 @@ export function useAutoRefresh(cb, ms = 30000) {
     const onShow = () => { if (!document.hidden) run(); };
     document.addEventListener('visibilitychange', onShow);
     window.addEventListener('focus', onShow);
-    return () => { clearInterval(id); document.removeEventListener('visibilitychange', onShow); window.removeEventListener('focus', onShow); };
+    // Rafraîchissement immédiat demandé par l'appli (ex. fin d'une tâche en mode concentration)
+    const now = () => ref.current(true);
+    window.addEventListener('suivi-refresh', now);
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', onShow); window.removeEventListener('focus', onShow); window.removeEventListener('suivi-refresh', now); };
   }, [ms]);
 }
 
@@ -97,7 +100,7 @@ const displayTitle = (t, today) => (t.original_date !== today && t.title.endsWit
 
 // ---------- Une tâche à cocher ----------
 export function TaskItem({ task, onChange, readOnly, showDate, allowPhoto, allowDelete, delay = 0 }) {
-  const { toast, user } = useApp();
+  const { toast, user, startFocus } = useApp();
   // Élève/admin : tâches ajoutées à la main ; parents : seulement celles qu'ils ont ajoutées
   const canDelete = allowDelete && (user.role === 'parent' ? task.source === 'parent' : ['manuel', 'parent'].includes(task.source));
   const [busy, setBusy] = useState(false);
@@ -148,6 +151,7 @@ export function TaskItem({ task, onChange, readOnly, showDate, allowPhoto, allow
           <span>{KIND_LABEL[task.kind] || 'Tâche'}</span>
           {showDate && <span>{shortDate(task.original_date)}</span>}
           {task.time && <span className="mono">{task.time}</span>}
+          {task.focus_seconds > 0 && <span className="row" style={{ gap: 2 }}><Timer size={12} /> {Math.round(task.focus_seconds / 60)} min{task.focus_exits ? ` · ${task.focus_exits} sortie${task.focus_exits > 1 ? 's' : ''}` : ''}</span>}
           {task.source === 'parent' && <span className="tag"><UsersRound size={12} /> parents</span>}
           {task.carried > 0 && !late && <span className="tag">reportée {task.carried}×</span>}
           {late && <span className="tag solid red"><TriangleAlert size={12} /> en retard</span>}
@@ -159,6 +163,9 @@ export function TaskItem({ task, onChange, readOnly, showDate, allowPhoto, allow
           <button className="icon-btn" onClick={() => fileRef.current?.click()} aria-label="Joindre une photo" disabled={busy}><Camera size={20} /></button>
           <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={upload} />
         </>
+      )}
+      {!readOnly && user.role !== 'parent' && !task.done_at && startFocus && (
+        <button className="icon-btn play" onClick={() => startFocus(task)} aria-label={`Commencer : ${task.title}`} title="Commencer (mode concentration)"><Play size={20} fill="currentColor" /></button>
       )}
       {!readOnly && !allowPhoto && !task.done_at && task.date === today && (
         <button className="icon-btn plain" onClick={postpone} aria-label="Reporter à demain" title="Reporter à demain"><CalendarClock size={20} /></button>
@@ -173,15 +180,44 @@ export function TaskItem({ task, onChange, readOnly, showDate, allowPhoto, allow
 }
 
 // ---------- Choix de matière / de date ----------
-export function SubjectChips({ value, onChange, onlySpe, allowNone }) {
-  const { subjects } = useApp();
-  const list = subjects.filter((s) => !onlySpe || s.is_spe || s.short === 'FR');
+// Toutes les matières, spécialités d'abord, + « Autre matière » pour en ajouter une à la main
+export function SubjectChips({ value, onChange, allowNone }) {
+  const { subjects, reloadSubjects, toast } = useApp();
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const list = [...subjects].sort((a, b) => b.is_spe - a.is_spe || a.position - b.position);
+  async function add() {
+    const n = name.trim();
+    if (!n) return;
+    const existing = subjects.find((s) => s.name.toLowerCase() === n.toLowerCase());
+    if (existing) { onChange(existing.id); setAdding(false); setName(''); return; }
+    setBusy(true);
+    try {
+      const { id } = await api('/subjects', { method: 'POST', body: { name: n } });
+      await reloadSubjects();
+      onChange(id); setAdding(false); setName('');
+      toast(`Matière « ${n} » ajoutée`);
+    } catch (e) { toast(e.message, 'red'); }
+    setBusy(false);
+  }
   return (
-    <div className="chips">
-      {allowNone && <button type="button" className={`chip ${!value ? 'on' : ''}`} onClick={() => onChange(null)}>Aucune</button>}
-      {list.map((s) => (
-        <button type="button" key={s.id} className={`chip ${value === s.id ? 'on' : ''}`} onClick={() => onChange(s.id)}>{s.name}</button>
-      ))}
+    <div className="stack">
+      <div className="chips">
+        {allowNone && <button type="button" className={`chip ${!value ? 'on' : ''}`} onClick={() => onChange(null)}>Aucune</button>}
+        {list.map((s) => (
+          <button type="button" key={s.id} className={`chip ${value === s.id ? 'on' : ''}`} onClick={() => onChange(s.id)}>{s.name}</button>
+        ))}
+        {!adding && <button type="button" className="chip" style={{ borderStyle: 'dashed' }} onClick={() => setAdding(true)}><Plus size={14} style={{ verticalAlign: -2 }} /> Autre matière</button>}
+      </div>
+      {adding && (
+        <div className="row">
+          <input className="input grow" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex. Philosophie, SVT, NSI, LLCER…" maxLength={40}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} aria-label="Nom de la matière" />
+          <button type="button" className="btn" onClick={add} disabled={busy || !name.trim()}>Ajouter</button>
+          <button type="button" className="icon-btn plain" onClick={() => { setAdding(false); setName(''); }} aria-label="Annuler"><X size={18} /></button>
+        </div>
+      )}
     </div>
   );
 }
@@ -295,7 +331,7 @@ export function AddSheet({ onClose, onDone, defaultDate }) {
           </div>
         )}
         {!['bac_francais', 'autre'].includes(tpl) && (
-          <div><label className="f">Matière</label><SubjectChips value={subject} onChange={setSubject} onlySpe={tpl !== 'event'} /></div>
+          <div><label className="f">Matière</label><SubjectChips value={subject} onChange={setSubject} /></div>
         )}
         <div>
           <label className="f" htmlFor="add-text">{tpl === 'bac_francais' ? 'Numéro du texte' : tpl === 'autre' ? 'Tâche' : 'Précision'}</label>

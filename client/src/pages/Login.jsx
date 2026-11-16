@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { api } from '../lib.js';
-import { PageRibbon, BrushTrail } from '../gesture.jsx';
+import { ScrollBackdrop, BrushTrail } from '../gesture.jsx';
 
 export default function Login({ onLogin }) {
   const [username, setU] = useState('');
@@ -15,7 +15,7 @@ export default function Login({ onLogin }) {
   }
   return (
     <div className="login">
-      <PageRibbon where="login" />
+      <ScrollBackdrop />
       <BrushTrail />
       <form className="panel stack" style={{ width: '100%', maxWidth: 380 }} onSubmit={submit}>
         <div className="label muted">Première générale · Maths · SES · Physique</div>

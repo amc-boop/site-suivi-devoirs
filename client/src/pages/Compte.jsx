@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api, ROLE_LABEL } from '../lib.js';
 import { useApp } from '../ui.jsx';
+import { NotificationsCard } from '../Notifications.jsx';
 
 export default function Compte() {
   const { user, toast } = useApp();
@@ -16,6 +17,7 @@ export default function Compte() {
     <div className="page">
       <h1 className="h1">Mon compte</h1>
       <div className="panel section"><b>{user.display_name}</b><div className="small muted mono">{user.username} · {ROLE_LABEL[user.role]}</div></div>
+      <NotificationsCard />
       <form className="panel section stack" onSubmit={save}>
         <b>Changer mon mot de passe</b>
         <div><label className="f" htmlFor="cur">Mot de passe actuel</label><input id="cur" className="input" type="password" value={current} onChange={(e) => setCurrent(e.target.value)} autoComplete="current-password" required /></div>

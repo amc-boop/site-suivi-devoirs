@@ -3,6 +3,8 @@ import { Eye, Camera, TriangleAlert, ChevronRight, Plus, CircleCheck, Undo2 } fr
 import { api, weekLabel, shortDate, EVENT_LABEL } from '../lib.js';
 import { useApp, Skeleton, Sheet, Pct, Bar, Lightbox, Empty, Flag, AddSheet, useAutoRefresh } from '../ui.jsx';
 import { WeekTasks, WeekStatus, DaysChecklist } from './Rendu.jsx';
+import { NotificationsBanner } from '../Notifications.jsx';
+import { ProgressCard, useProgress } from './Progression.jsx';
 
 function WeeksChart({ weeks }) {
   const list = [...weeks].reverse().filter((w) => w.total > 0);
@@ -53,7 +55,7 @@ function WeekDetail({ ws, onClose, onSeen }) {
             <Pct value={d.stats.pct} />
           </div>
           <div><WeekStatus report={d.report} /></div>
-          <div><div className="small muted" style={{ marginBottom: 6 }}>Journées validées par Martin</div><DaysChecklist ws={ws} dayReports={d.dayReports} today={d.today} /></div>
+          <div><div className="small muted" style={{ marginBottom: 6 }}>Rendus de Martin (jour par jour + week-end)</div><DaysChecklist ws={ws} dayReports={d.dayReports} today={d.today} weekendReport={d.report} /></div>
           {d.report?.submitted_at
             ? <div className="small"><b>Rendu envoyé</b> le {new Date(d.report.submitted_at).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</div>
             : <div className="small warn-text"><TriangleAlert size={16} /> Rendu pas encore envoyé</div>}
@@ -96,11 +98,19 @@ function WeekDetail({ ws, onClose, onSeen }) {
 }
 
 export default function Bilan() {
-  const { toast } = useApp();
+  const { toast, user, refreshAlerts } = useApp();
+  const progress = useProgress();
   const [data, setData] = useState(null);
   const [open, setOpen] = useState(null);
   const [adding, setAdding] = useState(false);
-  const load = useCallback((silent) => api('/overview').then(setData).catch((e) => !silent && toast(e.message, 'red')), [toast]);
+  const [alerts, setAlerts] = useState([]);
+  const load = useCallback((silent) => Promise.all([api('/overview'), user.role === 'eleve' ? [] : api('/alerts')])
+    .then(([o, a]) => { setData(o); setAlerts(a); }).catch((e) => !silent && toast(e.message, 'red')), [toast, user.role]);
+  async function seen(a) {
+    setAlerts((l) => l.filter((x) => x !== a));
+    await api('/alerts/seen', { method: 'POST', body: a.id ? { id: a.id } : { kind: a.kind, date: a.date } }).catch(() => {});
+    refreshAlerts?.();
+  }
   useEffect(() => { load(); }, [load]);
   useAutoRefresh(load);
   if (!data) return <div className="page"><Skeleton n={5} /></div>;
@@ -110,6 +120,24 @@ export default function Bilan() {
   return (
     <div className="page">
       <div className="row"><h1 className="h1 grow">Bilan</h1><button className="btn sm" onClick={() => setAdding(true)}><Plus size={18} /> Tâche</button></div>
+
+      <ProgressCard p={progress} />
+      <NotificationsBanner />
+
+      {alerts.length > 0 && (
+        <div className="section stack" aria-label="Alertes">
+          {alerts.map((a) => (
+            <div key={`${a.kind}-${a.date}-${a.id || ''}`} className="alert bad" role="alert" style={{ alignItems: 'flex-start' }}>
+              <TriangleAlert size={24} />
+              <div className="grow">
+                <b>{a.message}</b>
+                {a.details && <div className="small" style={{ whiteSpace: 'pre-line', marginTop: 4 }}>{a.details}</div>}
+              </div>
+              <button className="btn sm ghost" onClick={() => seen(a)} style={{ flex: 'none' }}>Vu</button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {toSee.length > 0 && (
         <button className="panel red row section" style={{ width: '100%', cursor: 'pointer', textAlign: 'left' }} onClick={() => setOpen(toSee[0].week_start)}>

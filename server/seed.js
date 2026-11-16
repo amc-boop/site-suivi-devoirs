@@ -38,11 +38,12 @@ export async function seed({ demo, accounts = DEFAULT_ACCOUNTS }) {
     for (const a of accounts) await run('INSERT INTO users(username, display_name, role, password_hash) VALUES (?,?,?,?)', a.username, a.display_name, a.role, hashPassword(a.password));
     for (const [i, [name, short, spe, rev]] of SUBJECTS.entries()) await run('INSERT INTO subjects(name, short, is_spe, review_daily, position) VALUES (?,?,?,?,?)', name, short, spe, rev, i);
     const sid = Object.fromEntries((await all('SELECT id, short FROM subjects')).map((s) => [s.short, s.id]));
-    for (const [wd, st, e, subj, room] of TIMETABLE) await run('INSERT INTO timetable(weekday, start, "end", subject_id, room) VALUES (?,?,?,?,?)', wd, st, e, sid[subj], room);
+    // Emploi du temps d'exemple seulement pour la démo locale ; en vrai, on l'importe en photo depuis l'Agenda
+    if (demo) for (const [wd, st, e, subj, room] of TIMETABLE) await run('INSERT INTO timetable(weekday, start, "end", subject_id, room) VALUES (?,?,?,?,?)', wd, st, e, sid[subj], room);
   });
   if (!demo) return console.log(`Base prête (sans données d'exemple) en ${Date.now() - T0} ms.`);
 
-  const { today, addDays, weekStart, generateDay, diffDays } = await import('./planner.js');
+  const { today, addDays, weekStart, generateDay, diffDays, weekday } = await import('./planner.js');
   const sid = Object.fromEntries((await all('SELECT id, short FROM subjects')).map((s) => [s.short, s.id]));
   const parentId = (await one("SELECT id FROM users WHERE role = 'parent' ORDER BY id LIMIT 1"))?.id ?? null;
   const T = today();
@@ -80,7 +81,7 @@ export async function seed({ demo, accounts = DEFAULT_ACCOUNTS }) {
 
   // Rendus du jour : la plupart des soirs des 3 dernières semaines
   for (let d = addDays(ws, -21); d < T; d = addDays(d, 1)) {
-    if (diffDays(addDays(ws, -21), d) % 5 !== 3) await run('INSERT INTO daily_reports(date, submitted_at) VALUES (?,?)', d, `${d}T20:30:00.000Z`);
+    if (weekday(d) <= 5 && diffDays(addDays(ws, -21), d) % 5 !== 3) await run('INSERT INTO daily_reports(date, submitted_at) VALUES (?,?)', d, `${d}T20:30:00.000Z`);
   }
   const g = (subj, d, title, v, coef = 1) => run('INSERT INTO grades(subject_id,date,title,value,out_of,coef) VALUES (?,?,?,?,20,?)', sid[subj], addDays(T, d), title, v, coef);
   await g('MATH', -60, 'DS 1 : fonctions', 9.5); await g('MATH', -40, 'DS 2 : suites', 11); await g('MATH', -23, 'DS 3 : second degré', 10.5);

@@ -3,14 +3,16 @@ import express from 'express';
 import cookieParser from 'cookie-parser';
 import multer from 'multer';
 import crypto from 'node:crypto';
-import { all, one, run, insert, ensureSchema, setSetting } from './db.js';
+import { all, one, run, insert, tx, ensureSchema, setSetting } from './db.js';
 import { ensureUpTo, today, addDays, weekStart, weekday, weekStats, isDate, priority, diffDays, limits } from './planner.js';
 import { rewardProgress } from './rewards.js';
-import { geminiEnabled, quizFromImages } from './gemini.js';
+import { geminiEnabled, quizFromImages, timetableFromImages } from './gemini.js';
 import { publicQuiz, generateWeeklyQuiz, answerQuestion, finishAttempt, weeklyQuizPassed, weeklyQuizSummary, weeklyQuizPossible } from './weeklyQuiz.js';
 import { hashPassword, verifyPassword } from './auth.js';
 import { savePhoto, readPhoto, deletePhoto } from './storage.js';
 import { seedIfEmpty } from './seed.js';
+import { computeProgress } from './progress.js';
+import { pushEnabled, publicKey, saveSubscription, removeSubscription, countSubscriptions, notifyUser, notifyParents, eveningRun } from './push.js';
 
 export const app = express();
 app.set('trust proxy', 1);
@@ -99,7 +101,9 @@ app.post('/api/logout', wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 app.get('/api/me', wrap(async (req, res) => {
-  res.json({ user: await currentUser(req), quizEnabled: geminiEnabled(), today: today() });
+  const user = await currentUser(req);
+  const alerts = user && user.role !== 'eleve' ? (await computeAlerts()).length : 0;
+  res.json({ user, quizEnabled: geminiEnabled(), today: today(), alerts });
 }));
 app.post('/api/me/password', ALL, wrap(async (req, res) => {
   const u = await one('SELECT * FROM users WHERE id = ?', req.user.id);
@@ -114,7 +118,7 @@ app.post('/api/me/password', ALL, wrap(async (req, res) => {
 
 // ---------- Matières et emploi du temps ----------
 app.get('/api/subjects', ALL, wrap(async (req, res) => res.json(await all('SELECT * FROM subjects ORDER BY position, id'))));
-app.post('/api/subjects', ADMIN, wrap(async (req, res) => {
+app.post('/api/subjects', ALL, wrap(async (req, res) => {
   const name = str(req.body.name, 40); if (!name) throw fail(400, 'Nom requis');
   const pos = (await one('SELECT COALESCE(MAX(position),0)+1 AS p FROM subjects')).p;
   const id = await insert('INSERT INTO subjects(name, short, is_spe, review_daily, position) VALUES (?,?,?,?,?)',
@@ -137,14 +141,89 @@ const validSlot = async (s) => {
   if (!(await one('SELECT 1 FROM subjects WHERE id = ?', Number(s.subject_id)))) throw fail(400, 'Matière inconnue');
   return [wd, s.start, s.end, Number(s.subject_id), str(s.room, 20)];
 };
-app.post('/api/timetable', PARENT, wrap(async (req, res) => {
+app.post('/api/timetable', ALL, wrap(async (req, res) => {
   res.json({ id: await insert('INSERT INTO timetable(weekday, start, "end", subject_id, room) VALUES (?,?,?,?,?)', ...(await validSlot(req.body))) });
 }));
-app.patch('/api/timetable/:id', PARENT, wrap(async (req, res) => {
+app.patch('/api/timetable/:id', ALL, wrap(async (req, res) => {
   await run('UPDATE timetable SET weekday=?, start=?, "end"=?, subject_id=?, room=? WHERE id=?', ...(await validSlot(req.body)), int(req.params.id));
   res.json({ ok: true });
 }));
-app.delete('/api/timetable/:id', PARENT, wrap(async (req, res) => { await run('DELETE FROM timetable WHERE id = ?', int(req.params.id)); res.json({ ok: true }); }));
+app.delete('/api/timetable/:id', ALL, wrap(async (req, res) => { await run('DELETE FROM timetable WHERE id = ?', int(req.params.id)); res.json({ ok: true }); }));
+
+// ---------- Emploi du temps en photo (Gemini) ----------
+const norm = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+// Correspondance nom écrit sur l'emploi du temps -> matière du site (ordre important : EPS avant physique)
+const SUBJECT_RULES = [
+  ['EPS', /\beps\b|sport|education physique/], ['ES', /enseign\w* scient|ens sci/], ['EMC', /\be ?m ?c\b|moral|civique/],
+  ['MATH', /math/], ['SES', /\bses\b|econom|sociales/], ['PC', /physique|chimie|\bpc\b|\bp c\b/],
+  ['FR', /francais|\bfr\b|lettres/], ['HG', /hist|geo/], ['ANG', /angl|english|\blv ?1\b|\blva\b/], ['ESP', /espagn|\blv ?2\b|\blvb\b/],
+];
+function matchSubject(label, subjects) {
+  const n = norm(label);
+  const exact = subjects.find((s) => norm(s.name) === n || norm(s.short) === n);
+  if (exact) return exact;
+  for (const [short, re] of SUBJECT_RULES) if (re.test(n)) { const s = subjects.find((x) => x.short === short); if (s) return s; }
+  return null;
+}
+const titleCase = (s) => String(s).toLowerCase().replace(/(^|[\s-])\p{L}/gu, (m) => m.toUpperCase()).slice(0, 40);
+
+// 1. Lecture de la photo : renvoie une proposition, rien n'est enregistré
+app.post('/api/timetable/import', ALL, memUpload.array('photos', 3), wrap(async (req, res) => {
+  const files = (req.files || []).filter((f) => /^image\//.test(f.mimetype));
+  if (!files.length) throw fail(400, "Prends une photo de l'emploi du temps.");
+  const subjects = await all('SELECT * FROM subjects ORDER BY position, id');
+  const found = await timetableFromImages(files.map((f) => ({ mime: f.mimetype, buffer: f.buffer })));
+  if (!found.length) throw fail(422, "Aucun cours trouvé sur la photo. Essaie avec une photo plus nette, bien droite, avec les jours et les heures visibles.");
+  const matched = found.map((c) => {
+    const s = matchSubject(c.label, subjects);
+    return { ...c, subject_id: s?.id ?? null, new_subject: s ? '' : titleCase(c.label) };
+  }).sort((a, b) => a.weekday - b.weekday || a.start.localeCompare(b.start));
+  // Deux heures qui se suivent dans la même matière et la même salle = un seul cours (8h-9h + 9h-10h -> 8h-10h)
+  const slots = [];
+  for (const c of matched) {
+    const prev = slots[slots.length - 1];
+    if (prev && prev.weekday === c.weekday && prev.end === c.start && prev.label === c.label && prev.room === c.room && prev.week === c.week) prev.end = c.end;
+    else slots.push({ ...c });
+  }
+  res.json({ slots, subjects });
+}));
+
+// 2. Enregistrement de la proposition vérifiée : remplace tout l'emploi du temps
+app.post('/api/timetable/replace', ALL, wrap(async (req, res) => {
+  const slots = Array.isArray(req.body.slots) ? req.body.slots.slice(0, 80) : [];
+  if (!slots.length) throw fail(400, 'Aucun cours à enregistrer.');
+  const result = await tx(async () => {
+    const created = {};
+    const rows = [];
+    for (const sl of slots) {
+      let sid = sl.subject_id ? Number(sl.subject_id) : null;
+      if (!sid) {
+        const name = str(sl.new_subject, 40); if (!name) throw fail(400, 'Chaque cours doit avoir une matière.');
+        if (!created[name]) {
+          const pos = (await one('SELECT COALESCE(MAX(position),0)+1 AS p FROM subjects')).p;
+          created[name] = await insert('INSERT INTO subjects(name, short, is_spe, review_daily, position) VALUES (?,?,0,1,?)', name, norm(name).replace(/ /g, '').slice(0, 4).toUpperCase() || 'MAT', pos);
+        }
+        sid = created[name];
+      }
+      rows.push(await validSlot({ ...sl, subject_id: sid }));
+    }
+    await run('DELETE FROM timetable');
+    for (const r of rows) await run('INSERT INTO timetable(weekday, start, "end", subject_id, room) VALUES (?,?,?,?,?)', ...r);
+    // Les tâches « revoir le cours » d'aujourd'hui sont recalculées avec le nouvel emploi du temps
+    const T = today();
+    await run("DELETE FROM tasks WHERE date = ? AND source = 'auto' AND kind = 'revision_cours' AND done_at IS NULL AND photo IS NULL", T);
+    const { maxPerDay } = await limits();
+    const todays = await all(`SELECT DISTINCT s.* FROM timetable tt JOIN subjects s ON s.id = tt.subject_id WHERE tt.weekday = ? AND s.review_daily = 1`, weekday(T));
+    todays.sort((x, y) => y.is_spe - x.is_spe || x.position - y.position);
+    for (const sub of todays) {
+      if ((await one('SELECT COUNT(*)::int AS n FROM tasks WHERE date = ?', T)).n >= maxPerDay) break;
+      await run(`INSERT INTO tasks(date, original_date, title, subject_id, kind, source, auto_key) VALUES (?,?,?,?, 'revision_cours', 'auto', ?) ON CONFLICT DO NOTHING`,
+        T, T, `Revoir le cours de ${sub.name} d'aujourd'hui`, sub.id, `rev-${sub.id}-${T}`);
+    }
+    return { count: rows.length, newSubjects: Object.keys(created) };
+  });
+  res.json(result);
+}));
 
 // ---------- Réglages ----------
 app.get('/api/settings', ALL, wrap(async (req, res) => res.json(await limits())));
@@ -206,7 +285,7 @@ app.post('/api/tasks', ALL, wrap(async (req, res) => {
 app.patch('/api/tasks/:id', ALL, wrap(async (req, res) => {
   const t = await one('SELECT * FROM tasks WHERE id = ?', int(req.params.id)); if (!t) throw fail(404, 'Tâche introuvable');
   // Les parents peuvent placer les tâches dans l'agenda, mais seul l'élève les coche
-  if (req.user.role === 'parent' && ('done' in req.body || req.body.title)) throw fail(403, "Seul l'élève peut cocher ses tâches.");
+  if (req.user.role === 'parent' && ('done' in req.body || req.body.title || req.body.focus)) throw fail(403, "Seul l'élève peut cocher ses tâches.");
   if ('time' in req.body) {
     if (req.body.time !== null && !isTime(req.body.time)) throw fail(400, 'Heure invalide');
     await run('UPDATE tasks SET time = ? WHERE id = ?', req.body.time, t.id);
@@ -215,6 +294,12 @@ app.patch('/api/tasks/:id', ALL, wrap(async (req, res) => {
     const d = Number(req.body.duration);
     if (!(d >= 15 && d <= 240)) throw fail(400, 'Durée invalide (15 à 240 minutes)');
     await run('UPDATE tasks SET duration = ? WHERE id = ?', Math.round(d / 15) * 15, t.id);
+  }
+  // Mode concentration : temps passé et nombre de sorties de l'appli, ajoutés à la tâche
+  if (req.body.focus && req.user.role !== 'parent') {
+    const sec = Math.max(0, Math.min(6 * 3600, Math.round(Number(req.body.focus.seconds) || 0)));
+    const exits = Math.max(0, Math.min(500, Math.round(Number(req.body.focus.exits) || 0)));
+    await run('UPDATE tasks SET focus_seconds = focus_seconds + ?, focus_exits = focus_exits + ? WHERE id = ?', sec, exits, t.id);
   }
   if ('done' in req.body) await run('UPDATE tasks SET done_at = ? WHERE id = ?', req.body.done ? nowIso() : null, t.id);
   if (req.body.title) await run('UPDATE tasks SET title = ? WHERE id = ?', str(req.body.title, 140), t.id);
@@ -283,14 +368,19 @@ app.delete('/api/events/:id', ALL, wrap(async (req, res) => { await run('DELETE 
 // ---------- Rendu de la semaine ----------
 async function weekReport(ws) {
   const we = addDays(ws, 6);
-  const [tasks, report, days, quiz, stats] = await Promise.all([
+  const sat = addDays(ws, 5);
+  const [tasks, report, days, quiz, stats, weekendTasks] = await Promise.all([
     all(`${taskRow} WHERE t.original_date BETWEEN ? AND ? ORDER BY t.original_date, t.id`, ws, we),
     one(`SELECT r.*, u.display_name AS seen_by_name FROM weekly_reports r LEFT JOIN users u ON u.id = r.seen_by WHERE week_start = ?`, ws),
-    all('SELECT date, submitted_at FROM daily_reports WHERE date BETWEEN ? AND ? ORDER BY date', ws, we),
+    all('SELECT date, submitted_at, total, done, missing FROM daily_reports WHERE date BETWEEN ? AND ? ORDER BY date', ws, we),
     weeklyQuizSummary(ws),
     weekStats(ws),
+    // Tâches prévues samedi et dimanche dans l'agenda : le rendu du week-end
+    all(`${taskRow} WHERE t.date BETWEEN ? AND ? ORDER BY t.date, t.id`, sat, we),
   ]);
-  return { week_start: ws, today: today(), stats, report: report || null, tasks, dayReports: days,
+  return { week_start: ws, today: today(), stats, report: report ? { ...report, missing: JSON.parse(report.missing || '[]') } : null, tasks,
+    dayReports: days.map((d) => ({ ...d, missing: JSON.parse(d.missing || '[]') })),
+    weekendTasks: sortTasks(weekendTasks).sort((x, y) => x.date.localeCompare(y.date)), canSubmit: today() >= we,
     quiz: quiz ? { ...quiz, required: true } : { required: await weeklyQuizPossible(ws), passed_at: null } };
 }
 
@@ -301,36 +391,143 @@ app.post('/api/weekly-quiz/generate', STUDENT, wrap(async (req, res) => res.json
 app.post('/api/weekly-quiz/answer', STUDENT, wrap(async (req, res) => res.json(await answerQuestion(wsOf(req.body.week), Number(req.body.i), req.body.choice))));
 app.post('/api/weekly-quiz/finish', STUDENT, wrap(async (req, res) => res.json(await finishAttempt(wsOf(req.body.week)))));
 
-// ---------- Rendu du jour ----------
+// ---------- Rendus : du jour (lundi → vendredi) et du week-end (samedi + dimanche, le dimanche soir) ----------
+const DAY_NAMES = ['', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+// Toutes les tâches prévues dans l'agenda pour ces jours-là, et celles qui ne sont pas faites
+async function checkTasks(dates) {
+  const tasks = await all(`SELECT id, title, date, done_at FROM tasks WHERE date IN (${dates.map(() => '?').join(',')}) ORDER BY date, id`, ...dates);
+  const missing = tasks.filter((t) => !t.done_at).map((t) => ({ id: t.id, title: t.title, date: t.date }));
+  return { total: tasks.length, done: tasks.length - missing.length, missing };
+}
+// Une alerte par sujet : on remplace l'alerte non vue précédente
+async function setAlert(kind, date, message, details) {
+  await run('DELETE FROM alerts WHERE kind = ? AND date = ? AND seen_at IS NULL', kind, date);
+  if (message) {
+    await run('INSERT INTO alerts(kind, date, message, details) VALUES (?,?,?,?)', kind, date, message, details || '');
+    // Notification immédiate sur le téléphone des parents
+    await notifyParents({ title: 'Alerte rendu', body: message, url: '/#/bilan', tag: `${kind}-${date}` }).catch(() => {});
+  }
+}
+const missingText = (m) => m.map((t) => `• ${t.title}`).join('\n');
+
 async function dayReport(D) {
-  const [tasks, report] = await Promise.all([all(`${taskRow} WHERE t.date = ?`, D), one('SELECT * FROM daily_reports WHERE date = ?', D)]);
-  return { date: D, today: today(), tasks: sortTasks(tasks), report: report || null };
+  const ws = weekStart(D);
+  const weekdays = Array.from({ length: 5 }, (_, i) => addDays(ws, i));
+  const [tasks, report, reports, counts] = await Promise.all([
+    all(`${taskRow} WHERE t.date = ?`, D),
+    one('SELECT * FROM daily_reports WHERE date = ?', D),
+    all(`SELECT date, submitted_at, total, done FROM daily_reports WHERE date BETWEEN ? AND ?`, weekdays[0], weekdays[4]),
+    all(`SELECT date, COUNT(*)::int AS total, COUNT(done_at)::int AS done FROM tasks WHERE date BETWEEN ? AND ? GROUP BY date`, weekdays[0], weekdays[4]),
+  ]);
+  const days = weekdays.map((d) => ({ date: d, report: reports.find((r) => r.date === d) || null, ...(counts.find((c) => c.date === d) || { total: 0, done: 0 }) }));
+  return { date: D, today: today(), tasks: sortTasks(tasks), report: report ? { ...report, missing: JSON.parse(report.missing || '[]') } : null, days };
 }
 app.get('/api/day-report', ALL, wrap(async (req, res) => {
-  const D = isDate(req.query.date) ? req.query.date : today();
-  if (D <= today()) await ensureUpTo();
+  const T = today();
+  let D = isDate(req.query.date) ? req.query.date : T;
+  // Le week-end, le rendu du jour affiche le vendredi (le samedi et le dimanche ont leur rendu du week-end)
+  if (weekday(D) >= 6) D = addDays(weekStart(D), 4);
+  if (D <= T) await ensureUpTo();
   res.json(await dayReport(D));
 }));
 app.post('/api/day-report/submit', STUDENT, wrap(async (req, res) => {
-  const D = isDate(req.body.date) ? req.body.date : today();
-  if (D > today()) throw fail(400, 'On ne peut pas valider une journée à venir.');
-  await run(`INSERT INTO daily_reports(date, submitted_at, comment) VALUES (?,?,?)
-    ON CONFLICT(date) DO UPDATE SET submitted_at = excluded.submitted_at, comment = excluded.comment`, D, nowIso(), str(req.body.comment, 500));
+  const T = today();
+  const D = isDate(req.body.date) ? req.body.date : T;
+  if (weekday(D) >= 6) throw fail(400, 'Le samedi et le dimanche se rendent ensemble, dans le rendu du week-end (dimanche soir).');
+  if (D > T) throw fail(400, 'On ne peut pas valider une journée à venir.');
+  if (D < addDays(T, -13)) throw fail(400, 'Cette journée est trop ancienne pour être rendue.');
+  const c = await checkTasks([D]);
+  await run(`INSERT INTO daily_reports(date, submitted_at, comment, total, done, missing) VALUES (?,?,?,?,?,?)
+    ON CONFLICT(date) DO UPDATE SET submitted_at = excluded.submitted_at, comment = excluded.comment, total = excluded.total, done = excluded.done, missing = excluded.missing`,
+    D, nowIso(), str(req.body.comment, 500), c.total, c.done, JSON.stringify(c.missing));
+  // Il manque des tâches prévues dans l'agenda : alerte pour les parents
+  await setAlert('jour_incomplet', D, c.missing.length
+    ? `Rendu du ${DAY_NAMES[weekday(D)]} incomplet : ${c.missing.length} tâche${c.missing.length > 1 ? 's' : ''} sur ${c.total} pas faite${c.missing.length > 1 ? 's' : ''}`
+    : null, missingText(c.missing));
   res.json(await dayReport(D));
 }));
 app.get('/api/report', ALL, wrap(async (req, res) => res.json(await weekReport(wsOf(req.query.week)))));
 app.post('/api/report/submit', STUDENT, wrap(async (req, res) => {
   const ws = wsOf(req.body.week);
-  // Le rendu de la semaine ne part qu'après avoir réussi le quiz de la semaine
+  const sat = addDays(ws, 5), sun = addDays(ws, 6);
+  if (today() < sun) throw fail(400, 'Le rendu du week-end se fait le dimanche soir.');
+  // Le rendu du week-end ne part qu'après avoir réussi le quiz de la semaine
   // (sauf s'il n'y a vraiment rien pour le construire : aucune tâche cochée ni quiz)
   if (!(await weeklyQuizPassed(ws)) && ((await weeklyQuizSummary(ws)) || (await weeklyQuizPossible(ws)))) {
     throw fail(400, `Réussis d'abord le quiz de la semaine (${(await limits()).weeklyQuizPass} % de bonnes réponses) pour envoyer ton rendu.`);
   }
-  await run(`INSERT INTO weekly_reports(week_start, submitted_at, student_comment) VALUES (?,?,?)
+  const c = await checkTasks([sat, sun]);
+  await run(`INSERT INTO weekly_reports(week_start, submitted_at, student_comment, total, done, missing) VALUES (?,?,?,?,?,?)
     ON CONFLICT(week_start) DO UPDATE SET submitted_at = excluded.submitted_at, student_comment = excluded.student_comment,
-      status = CASE WHEN weekly_reports.status = 'a_revoir' THEN NULL ELSE weekly_reports.status END`, ws, nowIso(), str(req.body.comment, 1000));
+      total = excluded.total, done = excluded.done, missing = excluded.missing,
+      status = CASE WHEN weekly_reports.status = 'a_revoir' THEN NULL ELSE weekly_reports.status END`,
+    ws, nowIso(), str(req.body.comment, 1000), c.total, c.done, JSON.stringify(c.missing));
+  await setAlert('weekend_incomplet', sat, c.missing.length
+    ? `Rendu du week-end incomplet : ${c.missing.length} tâche${c.missing.length > 1 ? 's' : ''} sur ${c.total} pas faite${c.missing.length > 1 ? 's' : ''}`
+    : null, missingText(c.missing));
   res.json(await weekReport(ws));
 }));
+
+// ---------- Notifications sur le téléphone ----------
+app.get('/api/push/status', ALL, wrap(async (req, res) => res.json({ enabled: pushEnabled(), publicKey: publicKey(), devices: await countSubscriptions(req.user.id) })));
+app.post('/api/push/subscribe', ALL, wrap(async (req, res) => {
+  if (!pushEnabled()) throw fail(503, 'Notifications pas encore configurées (clés VAPID manquantes).');
+  await saveSubscription(req.user.id, req.body.subscription);
+  res.json({ ok: true, devices: await countSubscriptions(req.user.id) });
+}));
+app.post('/api/push/unsubscribe', ALL, wrap(async (req, res) => { await removeSubscription(req.body.endpoint); res.json({ ok: true }); }));
+app.post('/api/push/test', ALL, wrap(async (req, res) => {
+  const n = await notifyUser(req.user.id, { title: 'Notifications activées', body: req.user.role === 'eleve' ? 'Tu recevras un rappel chaque jour à 18 h.' : 'Tu seras prévenu(e) quand un rendu est incomplet ou oublié.', url: '/#/' });
+  if (!n) throw fail(400, 'Aucun appareil abonné : active d’abord les notifications.');
+  res.json({ sent: n });
+}));
+// Tâche planifiée Vercel (vercel.json → crons) : rappel de 18 h, protégé par CRON_SECRET
+app.get('/api/cron/evening', wrap(async (req, res) => {
+  const secret = process.env.CRON_SECRET;
+  if (!secret || req.get('authorization') !== `Bearer ${secret}`) throw fail(401, 'Non autorisé');
+  res.json(await eveningRun({ force: req.query.force === '1' }));
+}));
+
+// ---------- Série, points, niveaux, badges ----------
+app.get('/api/progress', ALL, wrap(async (req, res) => res.json(await computeProgress())));
+
+// ---------- Alertes pour les parents ----------
+// Alertes enregistrées (rendu incomplet) + rendus oubliés, calculés à la volée
+async function computeAlerts() {
+  const T = today();
+  const first = (await one('SELECT MIN(original_date) AS d FROM tasks'))?.d;
+  if (!first) return [];
+  const from = [addDays(T, -14), first].sort()[1];
+  const [stored, seen, dayReps, weekReps, counts] = await Promise.all([
+    all('SELECT * FROM alerts WHERE seen_at IS NULL ORDER BY date DESC, id DESC LIMIT 30'),
+    all('SELECT kind, date FROM alerts WHERE seen_at IS NOT NULL AND date >= ?', from),
+    all('SELECT date FROM daily_reports WHERE date >= ?', from),
+    all('SELECT week_start FROM weekly_reports WHERE submitted_at IS NOT NULL AND week_start >= ?', addDays(from, -6)),
+    all('SELECT date, COUNT(*)::int AS n FROM tasks WHERE date >= ? AND date < ? GROUP BY date', from, T),
+  ]);
+  const isSeen = (k, d) => seen.some((x) => x.kind === k && x.date === d);
+  const out = stored.map((a) => ({ id: a.id, kind: a.kind, date: a.date, message: a.message, details: a.details }));
+  for (const { date, n } of counts) {
+    const wd = weekday(date);
+    // Jour de semaine passé, avec des tâches prévues, sans rendu
+    if (wd <= 5 && n > 0 && !dayReps.some((r) => r.date === date) && !isSeen('jour_manquant', date)) {
+      out.push({ kind: 'jour_manquant', date, message: `Pas de rendu le ${DAY_NAMES[wd]} ${Number(date.slice(8))} (${n} tâche${n > 1 ? 's' : ''} prévue${n > 1 ? 's' : ''})`, details: '' });
+    }
+    // Week-end terminé sans rendu (alerte posée sur le samedi)
+    if (wd === 6 && addDays(date, 1) < T && !weekReps.some((r) => r.week_start === weekStart(date)) && !isSeen('weekend_manquant', date)) {
+      out.push({ kind: 'weekend_manquant', date, message: `Pas de rendu du week-end du ${Number(date.slice(8))}`, details: '' });
+    }
+  }
+  return out.sort((a, b) => b.date.localeCompare(a.date));
+}
+app.get('/api/alerts', PARENT, wrap(async (req, res) => res.json(await computeAlerts())));
+app.post('/api/alerts/seen', PARENT, wrap(async (req, res) => {
+  const { id, kind, date } = req.body;
+  if (id) await run('UPDATE alerts SET seen_at = ? WHERE id = ?', nowIso(), int(id));
+  else if (kind && isDate(date)) await run('INSERT INTO alerts(kind, date, message, seen_at) VALUES (?,?,?,?)', str(kind, 30), date, 'vu', nowIso());
+  res.json({ ok: true });
+}));
+
 // Les parents valident le rendu de la semaine, ou le renvoient « à revoir » avec un commentaire
 app.post('/api/report/seen', PARENT, wrap(async (req, res) => {
   const ws = wsOf(req.body.week);
