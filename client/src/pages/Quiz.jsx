@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Camera, Brain, Play, Trash2, X, Lock, CircleCheck, TriangleAlert } from 'lucide-react';
-import { api } from '../lib.js';
+import { api, compressImage } from '../lib.js';
 import { useApp, Skeleton, Empty, SubjectChips, Bar, useAutoRefresh } from '../ui.jsx';
 
 function Player({ id, onExit }) {
@@ -85,7 +85,7 @@ export default function Quiz() {
     if (!files.length) return setErr('Prends au moins une photo du cours.');
     const form = new FormData();
     form.append('subject_id', subject); form.append('chapter', chapter);
-    files.forEach((f) => form.append('photos', f));
+    for (const f of files) form.append('photos', await compressImage(f, 2000, 0.85));
     setBusy(true);
     try { const r = await api('/quizzes', { method: 'POST', form }); setFiles([]); setChapter(''); await load(); setPlaying(r.id); }
     catch (e2) { setErr(e2.message); }

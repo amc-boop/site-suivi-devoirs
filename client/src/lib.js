@@ -37,3 +37,23 @@ export const KIND_LABEL = {
   devoir: 'Devoir', ds: 'Préparation DS', autre: 'Tâche',
 };
 export const ROLE_LABEL = { eleve: 'Élève', parent: 'Parent', admin: 'Admin' };
+
+// Réduit une photo avant l'envoi (plus rapide en 4G, et Vercel refuse les envois de plus de 4,5 Mo)
+export async function compressImage(file, maxSide = 1600, quality = 0.8) {
+  if (!file || !/^image\//.test(file.type) || file.type === 'image/gif') return file;
+  try {
+    const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
+    if (scale === 1 && file.size < 900 * 1024) { bmp.close?.(); return file; }
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bmp.width * scale);
+    canvas.height = Math.round(bmp.height * scale);
+    canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    bmp.close?.();
+    const blob = await new Promise((r) => canvas.toBlob(r, 'image/jpeg', quality));
+    if (!blob || blob.size >= file.size) return file;
+    return new File([blob], (file.name || 'photo').replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
+  } catch {
+    return file; // format non lisible par le navigateur (ex. HEIC sur certains Android) : envoyé tel quel
+  }
+}

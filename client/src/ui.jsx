@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, Camera, X, BookOpen, FileText, RotateCcw, PenLine, CalendarPlus, Plus, Trash2, CalendarClock, CircleCheck, TriangleAlert, UsersRound } from 'lucide-react';
-import { api, addDays, todayStr, weekday, shortDate, KIND_LABEL, EVENT_LABEL, DAYS } from './lib.js';
+import { api, compressImage, addDays, todayStr, weekday, shortDate, KIND_LABEL, EVENT_LABEL, DAYS } from './lib.js';
 
 export const AppCtx = createContext(null);
 export const useApp = () => useContext(AppCtx);
@@ -120,7 +120,7 @@ export function TaskItem({ task, onChange, readOnly, showDate, allowPhoto, allow
   async function upload(e) {
     const f = e.target.files?.[0];
     if (!f) return;
-    const form = new FormData(); form.append('photo', f);
+    const form = new FormData(); form.append('photo', await compressImage(f));
     setBusy(true);
     try { const t = await api(`/tasks/${task.id}/photo`, { method: 'POST', form }); onChange?.(t); toast('Photo ajoutée'); }
     catch (err) { toast(err.message, 'red'); }

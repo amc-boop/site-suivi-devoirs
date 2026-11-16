@@ -2,20 +2,27 @@
 // Sans GEMINI_API_KEY, la fonctionnalité est simplement désactivée.
 export const geminiEnabled = () => Boolean(process.env.GEMINI_API_KEY);
 // Modèle principal (Flash-Lite : rapide, lit les images, large quota gratuit) puis modèle de secours
-const MODELS = () => [...new Set([process.env.GEMINI_MODEL || 'gemini-flash-lite-latest', process.env.GEMINI_FALLBACK_MODEL || 'gemini-flash-latest'])];
+const MODELS = () => [...new Set([process.env.GEMINI_MODEL || 'gemini-flash-lite-latest', 'gemini-3.1-flash-lite', process.env.GEMINI_FALLBACK_MODEL || 'gemini-flash-latest'])];
 const fail = (msg, status) => Object.assign(new Error(msg), { status });
 
 // Appelle Gemini en essayant chaque modèle tant que l'erreur est temporaire (quota, surcharge, lenteur, modèle retiré)
 async function callGemini(body) {
-  let last;
-  for (const model of MODELS()) {
+  let last = fail('Gemini est indisponible pour le moment, réessaie dans quelques minutes.', 504);
+  // Plusieurs modèles à la suite : l'offre gratuite renvoie parfois 503 « forte demande » sur l'un d'eux
+  // Budget total de 50 s (la fonction Vercel est coupée à 60 s)
+  const plan = MODELS();
+  const deadline = Date.now() + 50_000;
+  for (const [n, model] of plan.entries()) {
+    if (n > 0) await new Promise((r) => setTimeout(r, 1000));
+    const left = deadline - Date.now();
+    if (left < 5000) break;
     let res;
     try {
       res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY },
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(45_000),
+        signal: AbortSignal.timeout(Math.min(20_000, left)),
       });
     } catch (e) {
       console.error('Gemini', model, e.name);

@@ -6,21 +6,24 @@
   "description": "Plateforme de suivi des révisions et devoirs (1ère générale)",
   "scripts": {
     "dev": "concurrently -k -n api,web -c gray,blue \"npm:dev:api\" \"npm:dev:web\"",
-    "dev:api": "node --disable-warning=ExperimentalWarning --env-file-if-exists=.env --watch server/index.js",
+    "dev:api": "node --env-file-if-exists=.env --watch server/index.js",
     "dev:web": "vite",
     "build": "vite build",
-    "start": "NODE_ENV=production node --disable-warning=ExperimentalWarning --env-file-if-exists=.env server/index.js",
-    "db:reset": "node --disable-warning=ExperimentalWarning server/seed.js --demo",
-    "db:vide": "node --disable-warning=ExperimentalWarning server/seed.js --vide"
+    "start": "NODE_ENV=production node --env-file-if-exists=.env server/index.js",
+    "db:reset": "node --env-file-if-exists=.env server/seed.js --demo",
+    "db:vide": "node --env-file-if-exists=.env server/seed.js --vide",
+    "db:init": "node --env-file-if-exists=.env server/seed.js --init"
   },
   "engines": {
-    "node": ">=22.13"
+    "node": ">=20"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.16",
     "cookie-parser": "^1.4.7",
     "express": "^4.22.3",
     "lucide-react": "^1.73.0",
     "multer": "^2.5.0",
+    "pg": "^8.23.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

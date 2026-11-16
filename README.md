@@ -14,7 +14,7 @@ npm run dev
 - Ordinateur : http://localhost:5173
 - Téléphone sur le même Wi-Fi : l'adresse « Network » affichée par Vite (ex. `http://192.168.1.20:5173`)
 
-La base de données (SQLite) est créée automatiquement dans `data/` avec des **données d'exemple** au premier lancement.
+La base de données locale (PGlite, un Postgres embarqué) est créée automatiquement dans `data/` avec des **données d'exemple** au premier lancement.
 
 | Rôle | Identifiant | Mot de passe par défaut |
 |---|---|---|
@@ -56,9 +56,19 @@ Sans clé, l'onglet Quiz affiche « Quiz pas encore activé » et rien ne casse.
 - **Notes** : toutes les matières (pas seulement les spés), courbe et moyenne par matière, et un onglet **Moyenne générale** (moyenne des moyennes de chaque matière) avec son évolution après chaque note.
 - **Réglages** (admin) : éditeur d'emploi du temps, comptes, matières (spé / révision du soir), limites des tâches.
 
+## Mise en ligne (Supabase + Vercel, gratuit)
+
+1. **Supabase** (https://supabase.com) : nouveau projet, région Paris. Remplir dans `.env` : `DATABASE_URL` (bouton Connect → Transaction pooler, port 6543), `SUPABASE_URL` et `SUPABASE_SERVICE_ROLE_KEY` (voir `.env.example`).
+2. **Créer les tables et les comptes** depuis l'ordinateur : `npm run db:init`. Les mots de passe sont générés au hasard et écrits dans `identifiants.txt` (ignoré par Git). La commande refuse d'écraser une base déjà remplie.
+3. **Vercel** (https://vercel.com) : « Add New → Project », importer le dépôt GitHub, puis dans *Environment Variables* ajouter `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `GEMINI_API_KEY` (et `GEMINI_MODEL` si besoin). Déployer : `vercel.json` s'occupe du reste (site statique + API dans une fonction).
+4. Les photos sont stockées dans Supabase Storage (bucket privé `photos`, créé automatiquement) et réduites sur le téléphone avant l'envoi.
+
+En local, pour travailler sur une base de test même quand `.env` contient `DATABASE_URL` : `DATABASE_URL= npm run dev`.
+
 ## Technique
 
-- `server/` : API Express + SQLite intégré à Node (`node:sqlite`), sessions par cookie, photos dans `data/uploads/`.
+- `server/` : API Express (`app.js`), base Postgres (Supabase en ligne, PGlite en local), sessions par cookie, photos dans Supabase Storage (ou `data/uploads/` en local). Heure de Paris côté serveur, limite de tentatives de connexion.
+- `api/index.js` + `vercel.json` : déploiement Vercel.
 - `client/` : React + Vite, mise à jour automatique des écrans toutes les 30 s et au retour sur l’appli, PWA (manifest + service worker), style manga noir et blanc défini dans `design.md` (rouge #A60321 = urgent, vert #90E098 = positif, toujours avec une icône et un libellé).
 - Production locale : `npm run build && npm start` puis http://localhost:3001
 

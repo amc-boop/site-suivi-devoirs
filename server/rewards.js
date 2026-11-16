@@ -1,5 +1,5 @@
 // Calcul de la progression des récompenses par paliers.
-import { db } from './db.js';
+import { all, one } from './db.js';
 import { today, weekStart, addDays, weekStats } from './planner.js';
 
 function avg(grades) {
@@ -8,19 +8,19 @@ function avg(grades) {
   return grades.reduce((s, g) => s + (g.value / g.out_of) * 20 * g.coef, 0) / tot;
 }
 
-export function rewardProgress(r) {
+export async function rewardProgress(r) {
   const p = JSON.parse(r.params || '{}');
   if (r.rule === 'semaines') {
     // Semaines terminées consécutives (la plus récente d'abord) au-dessus du seuil
     const pct = p.pct ?? 80, weeks = p.weeks ?? 3;
     let ws = addDays(weekStart(today()), -7), streak = 0;
     for (let i = 0; i < 52; i++, ws = addDays(ws, -7)) {
-      const s = weekStats(ws);
+      const s = await weekStats(ws);
       if (s.total === 0 || s.pct < pct) break;
       streak++;
     }
     // La semaine en cours compte si elle est déjà au-dessus du seuil
-    const cur = weekStats(weekStart(today()));
+    const cur = await weekStats(weekStart(today()));
     const curOk = cur.total > 0 && cur.pct >= pct;
     return {
       current: streak, target: weeks, reached: streak >= weeks,
@@ -30,13 +30,13 @@ export function rewardProgress(r) {
   }
   if (r.rule === 'note') {
     const gain = p.points ?? 2, n = p.last ?? 2;
-    const all = db.prepare('SELECT * FROM grades WHERE subject_id = ? ORDER BY date').all(p.subject_id);
-    const before = all.filter((g) => g.date < r.created_at);
-    const after = all.filter((g) => g.date >= r.created_at);
+    const list = await all('SELECT * FROM grades WHERE subject_id = ? ORDER BY date', p.subject_id);
+    const before = list.filter((g) => g.date < r.created_at);
+    const after = list.filter((g) => g.date >= r.created_at);
     const base = p.baseline ?? avg(before);
     const recent = avg(after.slice(-n));
     const diff = base != null && recent != null ? recent - base : null;
-    const subj = db.prepare('SELECT name FROM subjects WHERE id = ?').get(p.subject_id);
+    const subj = await one('SELECT name FROM subjects WHERE id = ?', p.subject_id);
     return {
       current: diff == null ? 0 : Math.round(diff * 10) / 10, target: gain,
       reached: diff != null && diff >= gain,
