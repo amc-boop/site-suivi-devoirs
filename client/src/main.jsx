@@ -4,6 +4,7 @@ import './styles.css';
 
 createRoot(document.getElementById('root')).render(<App />);
 
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
+// Service worker : installation sur l'écran d'accueil + notifications
+if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
 }

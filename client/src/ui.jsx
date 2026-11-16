@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Camera, X, BookOpen, FileText, RotateCcw, PenLine, CalendarPlus, Plus, Trash2, CalendarClock, CircleCheck, TriangleAlert, UsersRound } from 'lucide-react';
+import { Check, Camera, X, BookOpen, FileText, RotateCcw, PenLine, CalendarPlus, Plus, Trash2, CalendarClock, CircleCheck, TriangleAlert, UsersRound, Play, Timer } from 'lucide-react';
 import { api, compressImage, addDays, todayStr, weekday, shortDate, KIND_LABEL, EVENT_LABEL, DAYS } from './lib.js';
 
 export const AppCtx = createContext(null);
@@ -22,7 +22,10 @@ export function useAutoRefresh(cb, ms = 30000) {
     const onShow = () => { if (!document.hidden) run(); };
     document.addEventListener('visibilitychange', onShow);
     window.addEventListener('focus', onShow);
-    return () => { clearInterval(id); document.removeEventListener('visibilitychange', onShow); window.removeEventListener('focus', onShow); };
+    // Rafraîchissement immédiat demandé par l'appli (ex. fin d'une tâche en mode concentration)
+    const now = () => ref.current(true);
+    window.addEventListener('suivi-refresh', now);
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', onShow); window.removeEventListener('focus', onShow); window.removeEventListener('suivi-refresh', now); };
   }, [ms]);
 }
 
@@ -97,7 +100,7 @@ const displayTitle = (t, today) => (t.original_date !== today && t.title.endsWit
 
 // ---------- Une tâche à cocher ----------
 export function TaskItem({ task, onChange, readOnly, showDate, allowPhoto, allowDelete, delay = 0 }) {
-  const { toast, user } = useApp();
+  const { toast, user, startFocus } = useApp();
   // Élève/admin : tâches ajoutées à la main ; parents : seulement celles qu'ils ont ajoutées
   const canDelete = allowDelete && (user.role === 'parent' ? task.source === 'parent' : ['manuel', 'parent'].includes(task.source));
   const [busy, setBusy] = useState(false);
@@ -148,6 +151,7 @@ export function TaskItem({ task, onChange, readOnly, showDate, allowPhoto, allow
           <span>{KIND_LABEL[task.kind] || 'Tâche'}</span>
           {showDate && <span>{shortDate(task.original_date)}</span>}
           {task.time && <span className="mono">{task.time}</span>}
+          {task.focus_seconds > 0 && <span className="row" style={{ gap: 2 }}><Timer size={12} /> {Math.round(task.focus_seconds / 60)} min{task.focus_exits ? ` · ${task.focus_exits} sortie${task.focus_exits > 1 ? 's' : ''}` : ''}</span>}
           {task.source === 'parent' && <span className="tag"><UsersRound size={12} /> parents</span>}
           {task.carried > 0 && !late && <span className="tag">reportée {task.carried}×</span>}
           {late && <span className="tag solid red"><TriangleAlert size={12} /> en retard</span>}
@@ -159,6 +163,9 @@ export function TaskItem({ task, onChange, readOnly, showDate, allowPhoto, allow
           <button className="icon-btn" onClick={() => fileRef.current?.click()} aria-label="Joindre une photo" disabled={busy}><Camera size={20} /></button>
           <input ref={fileRef} type="file" accept="image/*" capture="environment" hidden onChange={upload} />
         </>
+      )}
+      {!readOnly && user.role !== 'parent' && !task.done_at && startFocus && (
+        <button className="icon-btn play" onClick={() => startFocus(task)} aria-label={`Commencer : ${task.title}`} title="Commencer (mode concentration)"><Play size={20} fill="currentColor" /></button>
       )}
       {!readOnly && !allowPhoto && !task.done_at && task.date === today && (
         <button className="icon-btn plain" onClick={postpone} aria-label="Reporter à demain" title="Reporter à demain"><CalendarClock size={20} /></button>

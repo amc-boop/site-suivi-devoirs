@@ -390,3 +390,33 @@ textarea.input { min-height: 90px; resize: vertical; }
 .tt-subj.unknown { border-color: var(--red); border-width: 2.5px; }
 .tt-label { grid-area: l; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tt-row > .icon-btn { grid-area: x; }
+
+/* ---------- Mode concentration : « NO WORK, NO PORSCHE !! » ---------- */
+.icon-btn.play { background: var(--ink); color: var(--paper); }
+.focus {
+  position: fixed; inset: 0; z-index: 700; background: var(--red); color: var(--on-red);
+  display: grid; place-items: center; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none;
+  padding: calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 16px);
+}
+.focus-lines {
+  position: absolute; inset: -50%; pointer-events: none;
+  background: repeating-conic-gradient(from 0deg at 50% 45%, rgba(255,255,255,.13) 0deg 1.6deg, transparent 1.6deg 8deg);
+  animation: focus-spin 60s linear infinite;
+}
+.focus::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(rgba(0,0,0,.22) 1.2px, transparent 1.4px) 0 0 / 8px 8px; mix-blend-mode: multiply; }
+@keyframes focus-spin { to { transform: rotate(360deg); } }
+.focus-inner { position: relative; z-index: 1; width: 100%; max-width: 460px; text-align: center; display: flex; flex-direction: column; gap: 16px; }
+.focus-sfx {
+  font-family: var(--display); font-size: clamp(3rem, 15vw, 5.2rem); line-height: .92; letter-spacing: .02em;
+  color: var(--paper); -webkit-text-stroke: 2px var(--ink); paint-order: stroke fill; text-shadow: 4px 4px 0 var(--ink);
+  transform: rotate(-4deg) skewX(-6deg); animation: impact .35s ease-out 1;
+}
+.focus-task { font-weight: 900; font-size: 1.15rem; background: var(--paper); color: var(--ink); border: 2.5px solid var(--ink); border-radius: var(--radius); padding: 10px 14px; box-shadow: 4px 4px 0 var(--ink); transform: rotate(1deg); }
+.focus-time { font-size: clamp(3.4rem, 18vw, 5rem); font-weight: 700; line-height: 1; text-shadow: 3px 3px 0 var(--ink); }
+.focus-goal .small { margin-top: 6px; }
+.focus-bar { height: 14px; border: 2.5px solid var(--ink); border-radius: 999px; background: var(--paper); overflow: hidden; }
+.focus-bar > span { display: block; height: 100%; background: var(--green); transform-origin: left; transition: transform 1s linear; }
+.focus-back { background: var(--ink); color: var(--paper); border-radius: var(--radius); padding: 8px 12px; font-weight: 700; animation: impact .3s ease-out 1; }
+.focus-done { min-height: 64px; font-size: 1.25rem; }
+.focus-quit { position: relative; overflow: hidden; border: 2px solid var(--paper); border-radius: var(--radius); background: transparent; color: var(--paper); font: inherit; font-size: .9rem; font-weight: 700; padding: 10px; display: flex; gap: 6px; align-items: center; justify-content: center; cursor: pointer; touch-action: none; -webkit-touch-callout: none; isolation: isolate; }
+.focus-quit-fill { position: absolute; inset: 0; background: rgba(22,22,22,.55); transform-origin: left; z-index: -1; }
