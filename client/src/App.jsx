@@ -60,7 +60,16 @@ export default function App() {
   if (user.role === 'parent' && path === '/') path = '/bilan';
   const Page = PAGES[path] || PAGES['/'];
 
-  async function logout() { await api('/logout', { method: 'POST' }).catch(() => {}); setMe({ user: null }); window.location.hash = ''; }
+  async function logout() {
+    // Ce téléphone arrête de recevoir les notifications du compte qui se déconnecte
+    try {
+      const reg = await navigator.serviceWorker?.getRegistration();
+      const sub = await reg?.pushManager?.getSubscription();
+      if (sub) { await api('/push/unsubscribe', { method: 'POST', body: { endpoint: sub.endpoint } }).catch(() => {}); await sub.unsubscribe(); }
+    } catch { /* pas de notifications sur cet appareil */ }
+    await api('/logout', { method: 'POST' }).catch(() => {});
+    setMe({ user: null }); window.location.hash = '';
+  }
 
   return (
     <AppCtx.Provider value={{ user, subjects, refreshAlerts, reloadSubjects: async () => setSubjects(await api('/subjects')), toast, quizEnabled: me.quizEnabled }}>
