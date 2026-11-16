@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, ChevronDown, Send, TriangleAlert, CircleCheck, Hourglass, CalendarCheck, Brain, Lock, X } from 'lucide-react';
 import { api, addDays, weekStart, todayStr, weekLabel, dayLabel, weekday, DAYS_SHORT, parse } from '../lib.js';
 import { useApp, TaskItem, Skeleton, Empty, Bar, Pct, Flag, useAutoRefresh } from '../ui.jsx';
@@ -27,73 +27,114 @@ export function WeekStatus({ report }) {
   return <span className="flag">Pas encore envoyée</span>;
 }
 
-// Les 7 jours de la semaine : journée validée ou non
-export function DaysChecklist({ ws, dayReports, today }) {
-  const done = new Set((dayReports || []).map((d) => d.date));
+// Lundi → vendredi (rendus du jour) + le week-end : rendu complet, incomplet ou oublié
+export function DaysChecklist({ ws, dayReports, today, weekendReport }) {
+  const byDate = Object.fromEntries((dayReports || []).map((d) => [d.date, d]));
+  const cell = (key, label, sub, state, title) => (
+    <div key={key} className={`dc ${state}`} title={title}>
+      <span>{label}</span>
+      {state === 'ok' ? <CircleCheck size={16} /> : state === 'miss' || state === 'part' ? <TriangleAlert size={14} /> : <b>{sub}</b>}
+    </div>
+  );
+  const stateOf = (r, past) => (r ? (r.missing?.length ? 'part' : 'ok') : past ? 'miss' : '');
   return (
-    <div className="days-check" aria-label="Journées validées">
-      {Array.from({ length: 7 }, (_, i) => {
-        const d = addDays(ws, i), ok = done.has(d), past = d < today;
-        return (
-          <div key={d} className={`dc ${ok ? 'ok' : past ? 'miss' : ''}`} title={dayLabel(d)}>
-            <span>{DAYS_SHORT[i + 1]}</span>
-            {ok ? <CircleCheck size={16} /> : past ? <TriangleAlert size={14} /> : <b>{parse(d).getDate()}</b>}
-          </div>
-        );
+    <div className="days-check" style={{ gridTemplateColumns: 'repeat(5, 1fr) 1.3fr' }} aria-label="Rendus de la semaine">
+      {Array.from({ length: 5 }, (_, i) => {
+        const d = addDays(ws, i), r = byDate[d];
+        const st = stateOf(r, d < today);
+        return cell(d, DAYS_SHORT[i + 1], parse(d).getDate(), st, `${dayLabel(d)} : ${st === 'ok' ? 'rendu complet' : st === 'part' ? `rendu incomplet (${r.missing.length} tâche(s) non faite(s))` : st === 'miss' ? 'pas de rendu' : 'à venir'}`);
       })}
+      {cell('we', 'W-E', `${parse(addDays(ws, 5)).getDate()}-${parse(addDays(ws, 6)).getDate()}`, stateOf(weekendReport?.submitted_at ? weekendReport : null, addDays(ws, 6) < today), 'Rendu du week-end')}
     </div>
   );
 }
 
+// Avant d'envoyer : s'il reste des tâches prévues non cochées, on prévient que les parents auront une alerte
+const confirmMissing = (tasks) => {
+  const left = tasks.filter((t) => !t.done_at);
+  if (!left.length) return true;
+  return confirm(`${left.length} tâche${left.length > 1 ? 's' : ''} prévue${left.length > 1 ? 's' : ''} pas cochée${left.length > 1 ? 's' : ''} :\n${left.map((t) => `• ${t.title}`).join('\n')}\n\nTes parents recevront une alerte. Envoyer quand même ?`);
+};
+
 function DayRendu() {
   const { toast } = useApp();
+  const T = todayStr();
+  const [date, setDate] = useState(weekday(T) <= 5 ? T : addDays(weekStart(T), 4));
   const [data, setData] = useState(null);
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState(false);
   const load = useCallback(async (silent) => {
-    try { const d = await api('/day-report'); setData(d); if (!silent) setComment(d.report?.comment || ''); } catch (e) { if (!silent) toast(e.message, 'red'); }
-  }, [toast]);
+    try { const d = await api(`/day-report?date=${date}`); setData(d); if (!silent) setComment(d.report?.comment || ''); } catch (e) { if (!silent) toast(e.message, 'red'); }
+  }, [date, toast]);
   useEffect(() => { load(); }, [load]);
   useAutoRefresh(load);
 
   async function submit() {
+    if (!confirmMissing(data.tasks)) return;
     setBusy(true);
-    try { setData(await api('/day-report/submit', { method: 'POST', body: { date: data.date, comment } })); toast('Journée validée !'); }
-    catch (e) { toast(e.message, 'red'); }
+    try {
+      const d = await api('/day-report/submit', { method: 'POST', body: { date: data.date, comment } });
+      setData(d);
+      toast(d.report.missing.length ? 'Rendu envoyé (incomplet : les parents sont prévenus)' : 'Journée validée !', d.report.missing.length ? 'red' : undefined);
+    } catch (e) { toast(e.message, 'red'); }
     setBusy(false);
   }
   const onTask = (t) => setData((d) => ({ ...d, tasks: d.tasks.map((x) => (x.id === t.id ? t : x)) }));
 
   if (!data) return <Skeleton n={3} />;
   const done = data.tasks.filter((t) => t.done_at).length, total = data.tasks.length;
+  const r = data.report;
   return (
     <>
       <div className="row" style={{ alignItems: 'flex-end' }}>
-        <div className="grow"><div className="small muted">{dayLabel(data.date)}</div><h1 className="h1">Rendu du jour</h1></div>
+        <div className="grow"><div className="small muted">Du lundi au vendredi, chaque soir</div><h1 className="h1">Rendu du jour</h1></div>
         <span className="kpi-value" style={{ fontSize: '2.4rem' }}>{done}/{total}</span>
       </div>
+
+      <div className="days-strip" role="tablist" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
+        {data.days.map((d, i) => {
+          const future = d.date > data.today;
+          const st = d.report ? (d.report.done < d.report.total ? 'part' : 'ok') : d.date < data.today && d.total > 0 ? 'miss' : '';
+          return (
+            <button key={d.date} role="tab" aria-selected={date === d.date} disabled={future}
+              className={`day-pill ${date === d.date ? 'on' : ''} ${d.date === data.today ? 'today' : ''}`} style={future ? { opacity: 0.4 } : undefined}
+              onClick={() => setDate(d.date)} aria-label={`${DAYS_SHORT[i + 1]} ${parse(d.date).getDate()}${st === 'ok' ? ', rendu' : st === 'part' ? ', rendu incomplet' : st === 'miss' ? ', pas de rendu' : ''}`}>
+              <div className="d">{DAYS_SHORT[i + 1]}</div>
+              <div className="n">{parse(d.date).getDate()}</div>
+              <div className="marks">{st === 'ok' && <CircleCheck size={12} color="var(--green)" />}{(st === 'part' || st === 'miss') && <TriangleAlert size={12} color="var(--red)" />}</div>
+            </button>
+          );
+        })}
+      </div>
+      <div className="small muted">{dayLabel(data.date)}</div>
       <div style={{ marginTop: 8 }}><Bar value={total ? (done / total) * 100 : 0} color={total && done === total ? 'green' : ''} /></div>
 
-      {data.report && (
+      {r && !r.missing.length && (
         <div className="alert ok" style={{ marginTop: 14 }} role="status">
           <CalendarCheck size={28} />
-          <div><span className="sfx-title">JOURNÉE VALIDÉE !</span><div className="small">Envoyée {when(data.report.submitted_at)}. Tu peux encore cocher et mettre à jour.</div></div>
+          <div><span className="sfx-title">JOURNÉE VALIDÉE !</span><div className="small">Envoyée {when(r.submitted_at)}. Tu peux encore cocher et renvoyer.</div></div>
+        </div>
+      )}
+      {r && r.missing.length > 0 && (
+        <div className="alert bad" style={{ marginTop: 14 }} role="status">
+          <TriangleAlert size={28} />
+          <div><span className="sfx-title" style={{ fontSize: '1.3rem' }}>RENDU INCOMPLET</span><div className="small">{r.missing.length} tâche{r.missing.length > 1 ? 's' : ''} prévue{r.missing.length > 1 ? 's' : ''} pas faite{r.missing.length > 1 ? 's' : ''} : tes parents ont reçu une alerte. Coche-les et renvoie ton rendu.</div></div>
         </div>
       )}
 
       <div style={{ marginTop: 14 }}>
-        {total === 0 ? <Empty sfx="RIEN AUJOURD'HUI">Aucune tâche prévue aujourd'hui.</Empty>
+        {total === 0 ? <Empty sfx="RIEN CE JOUR-LÀ">Aucune tâche prévue dans l'agenda ce jour-là.</Empty>
           : data.tasks.map((t, i) => <TaskItem key={t.id} task={t} allowPhoto onChange={onTask} delay={i * 80} />)}
       </div>
-      <div className="small muted" style={{ marginTop: 8 }}>Coche ce qui est fait. Pour un exercice ou un DS refait, ajoute une photo avec l'appareil.</div>
+      <div className="small muted" style={{ marginTop: 8 }}>Toutes les tâches prévues dans l'agenda ce jour-là doivent être cochées. Pour un exercice ou un DS refait, ajoute une photo.</div>
 
       <div className="panel section">
         <label className="f" htmlFor="dcmt">Un mot sur ta journée (facultatif)</label>
         <input id="dcmt" className="input" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Ex. Fiche de SES finie, exercice 37 pas compris" />
         <button className="btn green block big" style={{ marginTop: 12 }} onClick={submit} disabled={busy}>
-          <CircleCheck size={20} /> {data.report ? 'Mettre à jour ma journée' : 'Valider ma journée'}
+          <CircleCheck size={20} /> {r ? 'Renvoyer mon rendu du jour' : `Valider ma journée (${done}/${total})`}
         </button>
-        {total > 0 && done < total && !data.report && <div className="small muted center" style={{ marginTop: 6 }}>Les tâches non cochées seront reportées à demain.</div>}
+        {total > 0 && done < total && <div className="small warn-text" style={{ marginTop: 8 }}><TriangleAlert size={14} /> S'il manque des tâches, tes parents recevront une alerte.</div>}
       </div>
     </>
   );
@@ -210,39 +251,57 @@ function WeeklyQuizGate({ ws, info, onChange }) {
   );
 }
 
-function WeekRendu() {
+// Rendu du week-end : samedi + dimanche, à faire le dimanche soir. Quiz obligatoire, puis validation des parents.
+function WeekRendu({ first }) {
   const { toast } = useApp();
-  const [ws, setWs] = useState(weekStart(todayStr()));
+  const T = todayStr();
+  // En semaine, on affiche le dernier week-end tant qu'il n'est pas rendu ; le week-end, celui en cours
+  const [ws, setWs] = useState(weekday(T) >= 6 ? weekStart(T) : addDays(weekStart(T), -7));
   const [data, setData] = useState(null);
   const [comment, setComment] = useState('');
   const [busy, setBusy] = useState(false);
-  const weekend = weekday(todayStr()) >= 6;
-  const [showDetail, setShowDetail] = useState(weekend);
+  const [showDetail, setShowDetail] = useState(false);
+  const autoSwitched = useRef(false);
 
   const load = useCallback(async (silent) => {
     try { const d = await api(`/report?week=${ws}`); setData(d); if (!silent) setComment(d.report?.student_comment || ''); } catch (e) { if (!silent) toast(e.message, 'red'); }
   }, [ws, toast]);
   useEffect(() => { load(); }, [load]);
   useAutoRefresh(load);
+  // Dernier week-end déjà rendu et on est en semaine : on montre le prochain (en attente du dimanche)
+  useEffect(() => {
+    if (!autoSwitched.current && data && weekday(T) <= 5 && ws === addDays(weekStart(T), -7) && data.report?.submitted_at) { autoSwitched.current = true; setWs(weekStart(T)); setData(null); }
+    if (data) autoSwitched.current = true;
+  }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function submit() {
+    if (!confirmMissing(data.weekendTasks)) return;
     setBusy(true);
-    try { setData(await api('/report/submit', { method: 'POST', body: { week: ws, comment } })); toast('Semaine envoyée aux parents pour validation'); }
-    catch (e) { toast(e.message, 'red'); }
+    try {
+      const d = await api('/report/submit', { method: 'POST', body: { week: ws, comment } });
+      setData(d);
+      toast(d.report.missing.length ? 'Rendu envoyé (incomplet : les parents sont prévenus)' : 'Rendu du week-end envoyé aux parents', d.report.missing.length ? 'red' : undefined);
+    } catch (e) { toast(e.message, 'red'); }
     setBusy(false);
   }
+  const onTask = (t) => setData((d) => ({ ...d, weekendTasks: d.weekendTasks.map((x) => (x.id === t.id ? t : x)) }));
 
-  const isCurrent = ws === weekStart(todayStr());
+  const isCurrent = ws === weekStart(T);
   const r = data?.report;
   const validated = r?.status === 'validee';
   const quizLocked = Boolean(data?.quiz?.required && !data.quiz.passed_at);
+  const sat = addDays(ws, 5), sun = addDays(ws, 6);
+  const wDone = data?.weekendTasks.filter((t) => t.done_at).length ?? 0, wTotal = data?.weekendTasks.length ?? 0;
   return (
-    <div className="section" style={{ marginTop: 34 }}>
-      <div className="section-head"><h2 className="h2">Rendu de la semaine</h2></div>
-      <div className="week-nav">
-        <button className="icon-btn" onClick={() => { setWs(addDays(ws, -7)); setData(null); }} aria-label="Semaine précédente"><ChevronLeft /></button>
-        <div className="grow center"><b>Semaine {weekLabel(ws)}</b></div>
-        <button className="icon-btn" onClick={() => { setWs(addDays(ws, 7)); setData(null); }} disabled={isCurrent} aria-label="Semaine suivante"><ChevronRight /></button>
+    <div className={first ? '' : 'section'} style={first ? undefined : { marginTop: 34 }}>
+      <div className="row" style={{ alignItems: 'flex-end' }}>
+        <div className="grow"><div className="small muted">Samedi + dimanche, à rendre le dimanche soir</div>{first ? <h1 className="h1">Rendu du week-end</h1> : <h2 className="h2">Rendu du week-end</h2>}</div>
+        {data && <span className="kpi-value" style={{ fontSize: first ? '2.4rem' : '1.8rem' }}>{wDone}/{wTotal}</span>}
+      </div>
+      <div className="week-nav" style={{ marginTop: 8 }}>
+        <button className="icon-btn" onClick={() => { setWs(addDays(ws, -7)); setData(null); }} aria-label="Week-end précédent"><ChevronLeft /></button>
+        <div className="grow center"><b>Week-end du {parse(sat).getDate()} au {dayLabel(sun).replace(/^Dimanche /, '')}</b></div>
+        <button className="icon-btn" onClick={() => { setWs(addDays(ws, 7)); setData(null); }} disabled={isCurrent} aria-label="Week-end suivant"><ChevronRight /></button>
       </div>
 
       {!data ? <div className="section"><Skeleton n={2} /></div> : (
@@ -250,15 +309,15 @@ function WeekRendu() {
           <div className="panel tone section">
             <div className="row" style={{ alignItems: 'flex-start' }}>
               <div className="grow">
-                <div className="small muted">Tâches faites</div>
+                <div className="small muted">Toute la semaine</div>
                 <div className="stat">{data.stats.done} / {data.stats.total}</div>
                 <div style={{ marginTop: 6 }}><WeekStatus report={r} /></div>
               </div>
               <Pct value={data.stats.pct} />
             </div>
             <div style={{ marginTop: 10 }}><Bar value={data.stats.pct} /></div>
-            <div className="small muted" style={{ margin: '12px 0 6px' }}>Journées validées</div>
-            <DaysChecklist ws={ws} dayReports={data.dayReports} today={data.today} />
+            <div className="small muted" style={{ margin: '12px 0 6px' }}>Rendus de la semaine</div>
+            <DaysChecklist ws={ws} dayReports={data.dayReports} today={data.today} weekendReport={r} />
           </div>
 
           {r?.status === 'a_revoir' && (
@@ -273,9 +332,29 @@ function WeekRendu() {
               <div><span className="sfx-title" style={{ fontSize: '1.3rem' }}>SEMAINE VALIDÉE !</span>{r.parent_comment && <div className="small">{r.seen_by_name ? `${r.seen_by_name} : ` : ''}{r.parent_comment}</div>}</div>
             </div>
           )}
+          {r?.submitted_at && r.missing?.length > 0 && !validated && (
+            <div className="alert bad section" role="status">
+              <TriangleAlert size={26} />
+              <div><span className="sfx-title" style={{ fontSize: '1.3rem' }}>RENDU INCOMPLET</span><div className="small">{r.missing.length} tâche{r.missing.length > 1 ? 's' : ''} du week-end pas faite{r.missing.length > 1 ? 's' : ''} : tes parents ont reçu une alerte.</div></div>
+            </div>
+          )}
+
+          <div className="section">
+            {wTotal === 0 ? <Empty>Aucune tâche prévue ce week-end dans l'agenda.</Empty>
+              : [sat, sun].map((d) => {
+                const list = data.weekendTasks.filter((t) => t.date === d);
+                if (!list.length) return null;
+                return (
+                  <div key={d} style={{ marginTop: 12 }}>
+                    <div className="small" style={{ fontWeight: 900, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 6 }}>{dayLabel(d)}</div>
+                    {list.map((t) => <TaskItem key={t.id} task={t} allowPhoto onChange={onTask} />)}
+                  </div>
+                );
+              })}
+          </div>
 
           <button className="btn ghost block section" onClick={() => setShowDetail((v) => !v)} aria-expanded={showDetail}>
-            <ChevronDown size={18} style={{ transform: showDetail ? 'rotate(180deg)' : '' }} /> {showDetail ? 'Masquer' : 'Voir'} le détail de la semaine
+            <ChevronDown size={18} style={{ transform: showDetail ? 'rotate(180deg)' : '' }} /> {showDetail ? 'Masquer' : 'Voir'} toute la semaine
           </button>
           {showDetail && <WeekTasks tasks={data.tasks} onChange={() => load()} />}
 
@@ -283,12 +362,13 @@ function WeekRendu() {
 
           {!validated && (
             <div className="section panel">
-              {isCurrent && !weekend && !r?.submitted_at && <div className="small muted" style={{ marginBottom: 10 }}>Le rendu de la semaine se fait le week-end : vérifie que tout est coché, puis envoie-le aux parents.</div>}
+              {!data.canSubmit && <div className="small muted" style={{ marginBottom: 10 }}><Lock size={14} style={{ verticalAlign: -2 }} /> Le rendu du week-end s'envoie à partir du dimanche {parse(sun).getDate()}, le soir de préférence.</div>}
               <label className="f" htmlFor="cmt">Un mot pour les parents (facultatif)</label>
               <textarea id="cmt" className="input" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Ex. J'ai refait le DS de maths en entier" />
-              {quizLocked && <div className="small warn-text" style={{ marginTop: 10 }}><Lock size={16} /> Envoi possible une fois le quiz réussi.</div>}
-              <button className="btn block big" style={{ marginTop: 12 }} onClick={submit} disabled={busy || quizLocked}>
-                <Send size={20} /> {r?.status === 'a_revoir' ? 'Renvoyer aux parents' : r?.submitted_at ? 'Mettre à jour mon rendu' : 'Envoyer aux parents pour validation'}
+              {quizLocked && data.canSubmit && <div className="small warn-text" style={{ marginTop: 10 }}><Lock size={16} /> Envoi possible une fois le quiz réussi.</div>}
+              {data.canSubmit && wDone < wTotal && <div className="small warn-text" style={{ marginTop: 8 }}><TriangleAlert size={14} /> S'il manque des tâches du week-end, tes parents recevront une alerte.</div>}
+              <button className="btn block big" style={{ marginTop: 12 }} onClick={submit} disabled={busy || quizLocked || !data.canSubmit}>
+                <Send size={20} /> {r?.status === 'a_revoir' ? 'Renvoyer aux parents' : r?.submitted_at ? 'Mettre à jour mon rendu' : 'Envoyer le rendu du week-end'}
               </button>
               {r?.submitted_at && <div className="small muted center" style={{ marginTop: 8 }}>Envoyé {when(r.submitted_at)}</div>}
             </div>
@@ -299,11 +379,12 @@ function WeekRendu() {
   );
 }
 
+// En semaine : rendu du jour d'abord. Le week-end : rendu du week-end d'abord.
 export default function Rendu() {
+  const weekend = weekday(todayStr()) >= 6;
   return (
     <div className="page">
-      <DayRendu />
-      <WeekRendu />
+      {weekend ? <><WeekRendu first /><div className="section" style={{ marginTop: 34 }}><DayRendu /></div></> : <><DayRendu /><WeekRendu /></>}
     </div>
   );
 }
